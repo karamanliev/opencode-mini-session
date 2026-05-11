@@ -1,4 +1,3 @@
-/** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui"
 import type { Message, Part } from "@opencode-ai/sdk/v2"
 
@@ -16,7 +15,6 @@ type BtwConfig = {
   model: string | null
   fullTokenLimit: number
   miniMessageLimit: number
-  streamAnswer: boolean
   keybind: string | false
 }
 
@@ -143,14 +141,11 @@ async function startQuestion(
     loading: true,
     spinnerFrame: 0,
   }
-  const textParts = new Map<string, string>()
-  const partOrder: string[] = []
   const unsubscribers: Array<() => void> = []
   let tempSessionID: string | undefined
   let spinnerTimer: ReturnType<typeof setInterval> | undefined
   let closed = false
 
-  const syncAnswer = () => partOrder.map((id) => textParts.get(id) ?? "").filter(Boolean).join("\n\n")
   const renderDialog = () => {
     if (closed) return
     api.ui.dialog.setSize("large")
@@ -211,34 +206,9 @@ async function startQuestion(
       return
     }
 
-    unsubscribers.push(api.event.on("message.part.delta", (event) => {
-      if (!config.streamAnswer) return
-      if (event.properties.sessionID !== tempSessionID) return
-      if (event.properties.field !== "text") return
-
-      if (!textParts.has(event.properties.partID)) partOrder.push(event.properties.partID)
-      textParts.set(event.properties.partID, `${textParts.get(event.properties.partID) ?? ""}${event.properties.delta}`)
-      dialogState.answer = syncAnswer()
-      renderDialog()
-    }))
-
-    unsubscribers.push(api.event.on("message.part.updated", (event) => {
-      if (event.properties.sessionID !== tempSessionID) return
-      if (event.properties.part.type !== "text") return
-
-      const part = event.properties.part
-      if (!textParts.has(part.id)) partOrder.push(part.id)
-      textParts.set(part.id, part.text)
-
-      if (config.streamAnswer) {
-        dialogState.answer = syncAnswer()
-        renderDialog()
-      }
-    }))
-
     unsubscribers.push(api.event.on("session.idle", (event) => {
       if (event.properties.sessionID !== tempSessionID) return
-      const finalAnswer = extractAssistantText(api, tempSessionID) || syncAnswer()
+      const finalAnswer = extractAssistantText(api, tempSessionID)
       dialogState.answer = finalAnswer || "No response generated."
       dialogState.loading = false
       renderDialog()
@@ -283,10 +253,6 @@ function formatAnswerMessage(question: string, state: AnswerDialogState) {
     sections.push(`Answer:\nThinking${SPINNER_FRAMES[state.spinnerFrame]}`)
   }
 
-  if (state.loading) {
-    sections.push(state.answer ? "Streaming answer..." : "Waiting for answer...")
-  }
-
   return sections.join("\n\n")
 }
 
@@ -296,7 +262,6 @@ function parseConfig(options: unknown): BtwConfig {
     model: typeof input.model === "string" && input.model.trim() ? input.model.trim() : null,
     fullTokenLimit: parsePositiveNumber(input.fullTokenLimit, DEFAULT_FULL_TOKEN_LIMIT),
     miniMessageLimit: parsePositiveNumber(input.miniMessageLimit, DEFAULT_MINI_MESSAGE_LIMIT),
-    streamAnswer: typeof input.streamAnswer === "boolean" ? input.streamAnswer : true,
     keybind: parseKeybind(input.keybind),
   }
 }

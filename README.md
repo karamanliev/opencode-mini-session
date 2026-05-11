@@ -8,7 +8,7 @@
 - Adds `/btw-mini` for a recent text-only side question
 - Adds `ctrl+shift+b` as a shortcut for `/btw`
 - Creates a temporary session for the side question
-- Streams the answer into a native OpenCode dialog
+- Shows a native OpenCode loading dialog, then the final answer
 - Deletes the temporary session when the dialog is dismissed
 
 ## Files
