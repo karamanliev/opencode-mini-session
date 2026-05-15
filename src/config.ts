@@ -11,8 +11,8 @@ export function parseConfig(options: unknown): BtwConfig {
       typeof input.model === "string" && input.model.trim()
         ? input.model.trim()
         : null,
-    fullTokenLimit: parsePositiveNumber(
-      input.fullTokenLimit,
+    tokenLimit: parsePositiveNumber(
+      input.tokenLimit,
       DEFAULT_FULL_TOKEN_LIMIT,
     ),
     keybind: parseKeybind(input.keybind),

@@ -4,7 +4,7 @@ import type { Message, Part } from "@opencode-ai/sdk/v2";
 
 export type BtwConfig = {
   model: string | null;
-  fullTokenLimit: number;
+  tokenLimit: number;
   keybind: string | false;
   allowTools: boolean;
 };

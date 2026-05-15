@@ -20,7 +20,7 @@ Add the plugin to your OpenCode TUI config (usually `~/.config/opencode/tui.json
 ```json
 {
   "plugins": [
-    ["/path/to/opencode-btw/src/index.tsx", {
+    ["/path/to/opencode-btw/src/index.ts", {
       "model": null,
       "tokenLimit": 50000,
       "keybind": "alt+b",

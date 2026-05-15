@@ -57,7 +57,7 @@ export async function startQuestion(
   active: ActiveDialog,
 ) {
   const entries = getSessionEntries(api, sessionID);
-  const context = formatFullContext(entries, config.fullTokenLimit);
+  const context = formatFullContext(entries, config.tokenLimit);
   const system = buildSystemPrompt(context, config.allowTools);
   const resolvedModel = resolveModel(config.model, entries);
 
