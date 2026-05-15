@@ -1,42 +1,81 @@
-# opencode-btw
+# opencode-btw-plus
 
-`/btw` is a local OpenCode TUI plugin for asking quick side questions about the current session without polluting the main conversation history.
+An OpenCode TUI plugin that lets you ask ephemeral side questions without losing context in the main session.
 
 ## What it does
 
-- Adds `/btw` for a full-context side question
-- Adds `/btw-mini` for a recent text-only side question
-- Adds `ctrl+shift+b` as a shortcut for `/btw`
-- Creates a temporary session for the side question
-- Shows a native OpenCode loading dialog, then the final answer
-- Deletes the temporary session when the dialog is dismissed
+Press `alt+b` (or run `/btw` from the command palette) during any OpenCode session. A dialog prompts for your question. The plugin:
 
-## Files
+1. Gathers context from the current session (token-limited)
+2. Creates a temporary isolated session with that context
+3. Sends your question to the AI
+4. Shows the answer in a scrollable overlay dialog
+5. Optionally injects the Q&A back into the main thread (press `c`)
+6. Deletes the ephemeral session on close
 
-- `tui.tsx`, plugin entrypoint
-- `.opencode/plans/btw-plugin.md`, original implementation plan
-- `.opencode/plans/btw-plugin-api-addendum.md`, current API notes used during implementation
+## Installation
 
-## Development
+Add the plugin to your OpenCode TUI config (usually `~/.config/opencode/tui.json`):
 
-Install dependencies:
-
-```bash
-npm install
+```json
+{
+  "plugins": [
+    ["/path/to/opencode-btw/src/index.tsx", {
+      "model": null,
+      "tokenLimit": 50000,
+      "keybind": "alt+b",
+      "allowTools": true
+    }]
+  ]
+}
 ```
 
-Typecheck:
+Then install dependencies:
 
-```bash
-npm run typecheck
+```sh
+cd /path/to/opencode-btw
+bun install
 ```
 
-## Local OpenCode config
+## Configuration
 
-This repo is currently wired into the local OpenCode TUI config from:
+All options are optional. Defaults are shown below.
 
-`~/.config/opencode/tui.json`
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `model` | `string \| null` | `null` | Override model as `providerID/modelID` (e.g. `"anthropic/claude-sonnet-4-5"`). `null` auto-detects from current session. |
+| `tokenLimit` | `number` | `50000` | Maximum tokens of session context to include. |
+| `keybind` | `string \| false` | `"alt+b"` | Global keybind. Set to `false` or `"none"` to disable. |
+| `allowTools` | `boolean` | `true` | Allow the ephemeral session to use safe read-only tools. |
 
-using the file plugin path:
+## Keybinds
 
-`/home/ico/Projects/personal/opencode-btw/tui.tsx`
+### Trigger
+
+| Key | Action |
+|---|---|
+| `alt+b` | Open btw prompt |
+| `/btw` | Open btw prompt (command palette) |
+
+### Inside the answer dialog
+
+| Key | Action |
+|---|---|
+| `esc` / `enter` | Close dialog |
+| `c` | Continue in main thread (only when answer is ready) |
+| `up` / `k` | Scroll up 1 line |
+| `down` / `j` | Scroll down 1 line |
+| `pageup` | Scroll up 8 lines |
+| `pagedown` | Scroll down 8 lines |
+| `home` | Scroll to top |
+| `end` | Scroll to bottom |
+
+## Safe tools
+
+When `allowTools` is `true`, the ephemeral session can use these read-only tools:
+
+- `glob` - file pattern matching
+- `grep` - content search
+- `read` - file reading
+- `list` - directory listing
+- `webfetch` - URL fetching
