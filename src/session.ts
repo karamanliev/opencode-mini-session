@@ -100,10 +100,10 @@ export async function startQuestion(
 ) {
   const entries = getSessionEntries(api, sessionID);
   const context = formatFullContext(entries, config.tokenLimit);
-  const system = buildSystemPrompt(context, config.allowTools);
+  const system = buildSystemPrompt(context);
   const toolIDs = await getAvailableToolIDs(api);
-  const permission = buildPermissionRules(config.allowTools, toolIDs);
-  const tools = buildToolSelection(config.allowTools, toolIDs);
+  const permission = buildPermissionRules(toolIDs);
+  const tools = buildToolSelection(toolIDs);
   const selectedModel = modelPreference.get();
   const resolvedModel = resolveModel(config.model, entries, selectedModel);
   const modelName = formatResolvedModel(resolvedModel);
@@ -437,10 +437,9 @@ export function extractAssistantText(
   return chunks.join("\n\n").trim();
 }
 
-function buildSystemPrompt(context: string, allowTools: boolean) {
-  const toolNote = allowTools
-    ? "This side session is read-only. Never modify files, run write-capable tools, or change project state. You may use only the available safe read-only tools if the provided context is not enough, but prefer answering from the session context first."
-    : "This side session is read-only and has no tools. Never suggest modifying files, running commands, or changing project state.";
+function buildSystemPrompt(context: string) {
+  const toolNote =
+    "This side session is read-only. Never modify files, run write-capable tools, or change project state. You may use only the available safe read-only tools if the provided context is not enough, but prefer answering from the session context first.";
   const intro =
     "You are answering a quick side question about an ongoing coding session. Below is the conversation context from the session. Answer concisely based on what you can see.";
 
@@ -461,21 +460,18 @@ async function getAvailableToolIDs(api: TuiPluginApi): Promise<string[]> {
   return SAFE_TOOL_PERMISSION_IDS;
 }
 
-function buildToolSelection(allowTools: boolean, toolIDs: string[]) {
+function buildToolSelection(toolIDs: string[]) {
   return Object.fromEntries(
-    toolIDs.map((toolID) => [toolID, allowTools && SAFE_TOOL_PERMISSION_IDS.includes(toolID)]),
+    toolIDs.map((toolID) => [toolID, SAFE_TOOL_PERMISSION_IDS.includes(toolID)]),
   );
 }
 
-function buildPermissionRules(
-  allowTools: boolean,
-  toolIDs: string[],
-): PermissionRuleset {
+function buildPermissionRules(toolIDs: string[]): PermissionRuleset {
   const permissionIDs = [...new Set([...toolIDs, ...ADDITIONAL_PERMISSION_IDS])];
   return permissionIDs.map((permission) => ({
     permission,
     pattern: "*",
-    action: allowTools && SAFE_TOOL_PERMISSION_IDS.includes(permission) ? "allow" : "deny",
+    action: SAFE_TOOL_PERMISSION_IDS.includes(permission) ? "allow" : "deny",
   }));
 }
 

@@ -6,7 +6,6 @@ export type BtwConfig = {
   model: string | null;
   tokenLimit: number;
   keybind: string | false;
-  allowTools: boolean;
 };
 
 export type SessionEntry = {

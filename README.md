@@ -25,8 +25,7 @@ Add the plugin to your OpenCode TUI config (usually `~/.config/opencode/tui.json
     ["/path/to/opencode-btw/src/index.ts", {
       "model": null,
       "tokenLimit": 50000,
-      "keybind": "alt+b",
-      "allowTools": true
+      "keybind": "alt+b"
     }]
   ]
 }
@@ -48,7 +47,6 @@ All options are optional. Defaults are shown below.
 | `model` | `string \| null` | `null` | Override model as `providerID/modelID` (e.g. `"anthropic/claude-sonnet-4-5"`). `null` auto-detects from current session. |
 | `tokenLimit` | `number` | `50000` | Maximum tokens of session context to include. |
 | `keybind` | `string \| false` | `"alt+b"` | Global keybind. Set to `false` or `"none"` to disable. |
-| `allowTools` | `boolean` | `true` | Allow the ephemeral session to use safe read-only tools. |
 
 The `model` option controls the default model. Run `/btw-model` to choose a different model for future side questions. This choice lasts only until OpenCode restarts.
 
@@ -78,7 +76,7 @@ The `model` option controls the default model. Run `/btw-model` to choose a diff
 
 ## Safe tools
 
-When `allowTools` is `true`, the ephemeral session can use these read-only tools:
+The ephemeral session always uses these read-only tools:
 
 - `glob` - file pattern matching
 - `grep` - content search
