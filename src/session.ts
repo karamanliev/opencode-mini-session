@@ -87,9 +87,17 @@ export async function startQuestion(
     if (renderTimer) clearTimeout(renderTimer);
     setOverlay(undefined);
     if (!tempSessionID) return;
+    const ephemeralSessionID = tempSessionID;
+    tempSessionID = undefined;
+    try {
+      await api.client.session.abort(
+        { sessionID: ephemeralSessionID },
+        { throwOnError: true },
+      );
+    } catch {}
     try {
       await api.client.session.delete(
-        { sessionID: tempSessionID },
+        { sessionID: ephemeralSessionID },
         { throwOnError: true },
       );
     } catch {}
@@ -246,6 +254,7 @@ export async function startQuestion(
       { throwOnError: true },
     );
   } catch (cause) {
+    if (closed) return;
     dialogState.error = getErrorMessage(cause);
     dialogState.loading = false;
     renderOverlay();
