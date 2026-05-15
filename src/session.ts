@@ -1,5 +1,6 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import type { TuiDialogSelectOption, TuiPluginApi } from "@opencode-ai/plugin/tui";
+import type { PermissionRuleset } from "@opencode-ai/sdk/v2";
 import type { Setter } from "solid-js";
 import { SAFE_TOOLS } from "./constants";
 import { getSessionEntries, formatFullContext } from "./context";
@@ -16,6 +17,24 @@ import type {
 type ModelSelectValue =
   | { type: "default" }
   | { type: "model"; model: NonNullable<ResolvedModel["model"]>; variant?: string };
+
+const BTW_AGENT = "general";
+const SAFE_TOOL_PERMISSION_IDS = Object.keys(SAFE_TOOLS);
+const ADDITIONAL_PERMISSION_IDS = [
+  "edit",
+  "bash",
+  "task",
+  "external_directory",
+  "todowrite",
+  "question",
+  "websearch",
+  "codesearch",
+  "repo_clone",
+  "repo_overview",
+  "lsp",
+  "doom_loop",
+  "skill",
+];
 
 export async function openBtw(
   api: TuiPluginApi,
@@ -82,6 +101,9 @@ export async function startQuestion(
   const entries = getSessionEntries(api, sessionID);
   const context = formatFullContext(entries, config.tokenLimit);
   const system = buildSystemPrompt(context, config.allowTools);
+  const toolIDs = await getAvailableToolIDs(api);
+  const permission = buildPermissionRules(config.allowTools, toolIDs);
+  const tools = buildToolSelection(config.allowTools, toolIDs);
   const selectedModel = modelPreference.get();
   const resolvedModel = resolveModel(config.model, entries, selectedModel);
   const modelName = formatResolvedModel(resolvedModel);
@@ -219,7 +241,12 @@ export async function startQuestion(
 
   try {
     const created = await api.client.session.create(
-      { title: "btw (ephemeral)", directory: api.state.path.directory },
+      {
+        title: "btw (ephemeral)",
+        directory: api.state.path.directory,
+        agent: BTW_AGENT,
+        permission,
+      },
       { throwOnError: true },
     );
     tempSessionID = created.data.id;
@@ -293,7 +320,8 @@ export async function startQuestion(
       {
         sessionID: ephemeralSessionID,
         system,
-        tools: config.allowTools ? { ...SAFE_TOOLS } : {},
+        agent: BTW_AGENT,
+        tools,
         parts: [{ type: "text", text: question }],
         ...(resolvedModel.model ? { model: resolvedModel.model } : {}),
         ...(resolvedModel.variant ? { variant: resolvedModel.variant } : {}),
@@ -411,12 +439,44 @@ export function extractAssistantText(
 
 function buildSystemPrompt(context: string, allowTools: boolean) {
   const toolNote = allowTools
-    ? "You may use the available safe tools if the provided context is not enough, but prefer answering from the session context first."
-    : "Do not suggest running commands or reading files; you have no tools.";
+    ? "This side session is read-only. Never modify files, run write-capable tools, or change project state. You may use only the available safe read-only tools if the provided context is not enough, but prefer answering from the session context first."
+    : "This side session is read-only and has no tools. Never suggest modifying files, running commands, or changing project state.";
   const intro =
     "You are answering a quick side question about an ongoing coding session. Below is the conversation context from the session. Answer concisely based on what you can see.";
 
   return `${intro} ${toolNote}\n\n<session-context>\n${context}\n</session-context>`;
+}
+
+async function getAvailableToolIDs(api: TuiPluginApi): Promise<string[]> {
+  try {
+    const result = await api.client.tool.ids(
+      { directory: api.state.path.directory },
+      { throwOnError: true },
+    );
+    if (Array.isArray(result.data) && result.data.every((item) => typeof item === "string")) {
+      return result.data;
+    }
+  } catch {}
+
+  return SAFE_TOOL_PERMISSION_IDS;
+}
+
+function buildToolSelection(allowTools: boolean, toolIDs: string[]) {
+  return Object.fromEntries(
+    toolIDs.map((toolID) => [toolID, allowTools && SAFE_TOOL_PERMISSION_IDS.includes(toolID)]),
+  );
+}
+
+function buildPermissionRules(
+  allowTools: boolean,
+  toolIDs: string[],
+): PermissionRuleset {
+  const permissionIDs = [...new Set([...toolIDs, ...ADDITIONAL_PERMISSION_IDS])];
+  return permissionIDs.map((permission) => ({
+    permission,
+    pattern: "*",
+    action: allowTools && SAFE_TOOL_PERMISSION_IDS.includes(permission) ? "allow" : "deny",
+  }));
 }
 
 function buildContinuePrompt(question: string, answer: string) {
