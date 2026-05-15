@@ -22,6 +22,13 @@ export type ResolvedModel = {
   variant?: string;
 };
 
+export type ModelPreference = ResolvedModel | undefined;
+
+export type ModelPreferenceState = {
+  get: () => ModelPreference;
+  set: (model: ModelPreference) => void;
+};
+
 export type ActiveDialog = {
   get: () => ActiveDialogController | undefined;
   set: (dialog: ActiveDialogController | undefined) => void;

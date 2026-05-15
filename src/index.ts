@@ -4,6 +4,7 @@ import { createOverlaySlot } from "./components/AnswerDialog";
 import { parseConfig } from "./config";
 import {
   CMD_BLOCK_INPUT,
+  CMD_CHANGE_MODEL,
   CMD_CLOSE,
   CMD_CONTINUE,
   CMD_HIDE,
@@ -18,12 +19,20 @@ import {
   SCROLL_LINE_DELTA,
   SCROLL_PAGE_DELTA,
 } from "./constants";
-import { openBtw } from "./session";
-import type { ActiveDialogController, OverlayState } from "./types";
+import { openBtw, openModelPicker } from "./session";
+import type {
+  ActiveDialogController,
+  ModelPreference,
+  OverlayState,
+} from "./types";
 
 const tui: TuiPlugin = async (api, options) => {
   const config = parseConfig(options);
   const [overlay, setOverlay] = createSignal<OverlayState | undefined>(
+    undefined,
+    { equals: false },
+  );
+  const [selectedModel, setSelectedModel] = createSignal<ModelPreference>(
     undefined,
     { equals: false },
   );
@@ -94,6 +103,27 @@ const tui: TuiPlugin = async (api, options) => {
             set: (dialog) => {
               activeDialog = dialog;
             },
+          }, {
+            get: selectedModel,
+            set: setSelectedModel,
+          });
+        },
+      },
+      {
+        namespace: "palette",
+        name: CMD_CHANGE_MODEL,
+        title: "btw model",
+        desc: "Change the model for future btw side questions",
+        category: "Plugin",
+        slashName: "btw-model",
+        enabled: () => api.route.current.name === "session",
+        run() {
+          const currentRoute = api.route.current;
+          if (currentRoute.name !== "session") return;
+          const { sessionID } = currentRoute.params as { sessionID: string };
+          openModelPicker(api, config, sessionID, {
+            get: selectedModel,
+            set: setSelectedModel,
           });
         },
       },

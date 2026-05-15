@@ -50,6 +50,8 @@ All options are optional. Defaults are shown below.
 | `keybind` | `string \| false` | `"alt+b"` | Global keybind. Set to `false` or `"none"` to disable. |
 | `allowTools` | `boolean` | `true` | Allow the ephemeral session to use safe read-only tools. |
 
+The `model` option controls the default model. Run `/btw-model` to choose a different model for future side questions. This choice lasts only until OpenCode restarts.
+
 ## Keybinds
 
 ### Trigger
@@ -58,6 +60,7 @@ All options are optional. Defaults are shown below.
 |---|---|
 | `alt+b` | Open btw prompt |
 | `/btw` | Open btw prompt (command palette) |
+| `/btw-model` | Change model for future `btw` questions |
 
 ### Inside the answer dialog
 

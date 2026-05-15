@@ -4,6 +4,7 @@ export const CMD_OPEN = "btw.open";
 export const CMD_HIDE = "btw.hide";
 export const CMD_CLOSE = "btw.close";
 export const CMD_CONTINUE = "btw.continue";
+export const CMD_CHANGE_MODEL = "btw.change-model";
 export const CMD_SCROLL_UP = "btw.scroll-up";
 export const CMD_SCROLL_DOWN = "btw.scroll-down";
 export const CMD_PAGE_UP = "btw.page-up";

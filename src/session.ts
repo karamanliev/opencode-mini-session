@@ -1,5 +1,5 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
-import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
+import type { TuiDialogSelectOption, TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { Setter } from "solid-js";
 import { SAFE_TOOLS } from "./constants";
 import { getSessionEntries, formatFullContext } from "./context";
@@ -8,14 +8,21 @@ import type {
   ActiveDialog,
   AnswerDialogState,
   BtwConfig,
+  ModelPreferenceState,
   OverlayState,
+  ResolvedModel,
 } from "./types";
+
+type ModelSelectValue =
+  | { type: "default" }
+  | { type: "model"; model: NonNullable<ResolvedModel["model"]>; variant?: string };
 
 export async function openBtw(
   api: TuiPluginApi,
   config: BtwConfig,
   setOverlay: Setter<OverlayState | undefined>,
   active: ActiveDialog,
+  modelPreference: ModelPreferenceState,
 ) {
   const currentRoute = api.route.current;
 
@@ -32,12 +39,14 @@ export async function openBtw(
 
   const { sessionID } = currentRoute.params as { sessionID: string };
   const title = "btw";
+  const entries = getSessionEntries(api, sessionID);
+  const currentModel = resolveModel(config.model, entries, modelPreference.get());
 
   api.ui.dialog.setSize("medium");
   api.ui.dialog.replace(() =>
     api.ui.DialogPrompt({
       title,
-      placeholder: "Ask a side question",
+      placeholder: `Ask a side question (${formatResolvedModel(currentModel)})`,
       onCancel: () => api.ui.dialog.clear(),
       onConfirm: (value) => {
         const question = value.trim();
@@ -45,7 +54,16 @@ export async function openBtw(
           api.ui.toast({ variant: "warning", message: "Enter a question first." });
           return;
         }
-        void startQuestion(api, config, title, sessionID, question, setOverlay, active);
+        void startQuestion(
+          api,
+          config,
+          title,
+          sessionID,
+          question,
+          setOverlay,
+          active,
+          modelPreference,
+        );
       },
     }),
   );
@@ -59,11 +77,14 @@ export async function startQuestion(
   question: string,
   setOverlay: Setter<OverlayState | undefined>,
   active: ActiveDialog,
+  modelPreference: ModelPreferenceState,
 ) {
   const entries = getSessionEntries(api, sessionID);
   const context = formatFullContext(entries, config.tokenLimit);
   const system = buildSystemPrompt(context, config.allowTools);
-  const resolvedModel = resolveModel(config.model, entries);
+  const selectedModel = modelPreference.get();
+  const resolvedModel = resolveModel(config.model, entries, selectedModel);
+  const modelName = formatResolvedModel(resolvedModel);
 
   const dialogState: AnswerDialogState = {
     entries: [],
@@ -152,7 +173,7 @@ export async function startQuestion(
     setOverlay({
       api,
       title,
-      modelName: formatResolvedModel(resolvedModel),
+      modelName,
       state: dialogState,
       canContinue:
         !dialogState.loading &&
@@ -285,6 +306,94 @@ export async function startQuestion(
     dialogState.loading = false;
     renderOverlay();
   }
+}
+
+export function openModelPicker(
+  api: TuiPluginApi,
+  config: BtwConfig,
+  sessionID: string,
+  modelPreference: ModelPreferenceState,
+) {
+  const defaultModel = resolveModel(
+    config.model,
+    getSessionEntries(api, sessionID),
+  );
+  const options = buildModelOptions(api, defaultModel);
+
+  api.ui.dialog.setSize("large");
+  api.ui.dialog.replace(() =>
+    api.ui.DialogSelect<ModelSelectValue>({
+      title: "btw model",
+      placeholder: "Select model for future btw questions",
+      options,
+      onSelect: (option) => {
+        if (option.value.type === "default") {
+          modelPreference.set(undefined);
+          api.ui.toast({ variant: "success", message: "btw model reset to default." });
+        } else {
+          modelPreference.set({
+            model: option.value.model,
+            variant: option.value.variant,
+          });
+          api.ui.toast({
+            variant: "success",
+            message: `btw model set to ${formatResolvedModel({
+              model: option.value.model,
+              variant: option.value.variant,
+            })}.`,
+          });
+        }
+        api.ui.dialog.clear();
+      },
+    }),
+  );
+}
+
+function buildModelOptions(
+  api: TuiPluginApi,
+  defaultModel: ResolvedModel,
+): TuiDialogSelectOption<ModelSelectValue>[] {
+  const options: TuiDialogSelectOption<ModelSelectValue>[] = [
+    {
+      title: "Use default",
+      value: { type: "default" },
+      description: `Config model or main session model: ${formatResolvedModel(defaultModel)}`,
+      category: "btw",
+    },
+  ];
+
+  const providers = [...api.state.provider].sort((left, right) =>
+    left.name.localeCompare(right.name),
+  );
+
+  for (const provider of providers) {
+    const models = Object.values(provider.models).sort((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+    for (const model of models) {
+      const resolved = {
+        providerID: model.providerID,
+        modelID: model.id,
+      };
+      options.push({
+        title: model.name || model.id,
+        value: { type: "model", model: resolved },
+        description: `${provider.id}/${model.id}`,
+        category: provider.name,
+      });
+
+      for (const variant of Object.keys(model.variants ?? {}).sort()) {
+        options.push({
+          title: `${model.name || model.id} (${variant})`,
+          value: { type: "model", model: resolved, variant },
+          description: `${provider.id}/${model.id}`,
+          category: provider.name,
+        });
+      }
+    }
+  }
+
+  return options;
 }
 
 export function extractAssistantText(

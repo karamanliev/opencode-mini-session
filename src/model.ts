@@ -3,7 +3,9 @@ import type { ResolvedModel, SessionEntry } from "./types";
 export function resolveModel(
   modelOverride: string | null,
   entries: SessionEntry[],
+  selectedModel?: ResolvedModel,
 ): ResolvedModel {
+  if (selectedModel?.model) return selectedModel;
   if (modelOverride) return { model: parseModelOverride(modelOverride) };
 
   let assistantFallback: ResolvedModel | undefined;
@@ -36,7 +38,7 @@ export function resolveModel(
   return {};
 }
 
-function parseModelOverride(value: string) {
+export function parseModelOverride(value: string) {
   const [providerID, ...rest] = value.split("/");
   const modelID = rest.join("/");
   if (!providerID || !modelID) return undefined;
