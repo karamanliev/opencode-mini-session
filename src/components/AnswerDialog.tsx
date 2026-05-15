@@ -1,0 +1,337 @@
+/** @jsxImportSource @opentui/solid */
+import { type KeyEvent, type ScrollBoxRenderable } from "@opentui/core";
+import { useKeyboard } from "@opentui/solid";
+import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
+import type { Part } from "@opencode-ai/sdk/v2";
+import { SCROLL_LINE_DELTA, SCROLL_PAGE_DELTA, THINKING_TEXT } from "../constants";
+import type { AnswerDialogProps, AnswerDialogState, OverlayState } from "../types";
+import { extractAssistantText } from "../session";
+import { ActionButton } from "./ActionButton";
+import { HintBar } from "./HintBar";
+
+type MiniPart =
+  | { type: "text"; text: string }
+  | { type: "reasoning"; text: string }
+  | { type: "tool"; text: string; status: string }
+  | { type: "meta"; text: string };
+
+type MiniMessage = {
+  id: string;
+  role: "user" | "assistant";
+  parts: MiniPart[];
+};
+
+export function AnswerDialog(props: AnswerDialogProps) {
+  const theme = props.api.theme.current;
+  let scroller: ScrollBoxRenderable | undefined;
+
+  const screenWidth = props.api.renderer.width;
+  const screenHeight = props.api.renderer.height;
+  const panelWidth = Math.min(100, Math.floor(screenWidth * 0.85));
+  const panelHeight = Math.max(
+    12,
+    Math.min(screenHeight - 6, Math.floor(screenHeight * 0.68)),
+  );
+  const transcriptHeight = Math.max(5, panelHeight - 7);
+  const transcriptWidth = Math.max(20, panelWidth - 8);
+  const transcriptContentWidth = Math.max(20, transcriptWidth - 5);
+
+  useKeyboard((event: KeyEvent) => {
+    if (event.ctrl || event.meta || event.option) return;
+
+    switch (event.name) {
+      case "escape":
+      case "enter":
+      case "return":
+        props.onClose();
+        return;
+      case "c":
+        if (props.canContinue) props.onContinue();
+        return;
+      case "up":
+      case "k":
+        scroller?.scrollBy(-SCROLL_LINE_DELTA);
+        return;
+      case "down":
+      case "j":
+        scroller?.scrollBy(SCROLL_LINE_DELTA);
+        return;
+      case "pageup":
+        scroller?.scrollBy(-SCROLL_PAGE_DELTA);
+        return;
+      case "pagedown":
+        scroller?.scrollBy(SCROLL_PAGE_DELTA);
+        return;
+      case "home":
+        scroller?.scrollTo(0);
+        return;
+      case "end":
+        scroller?.scrollTo(Number.MAX_SAFE_INTEGER);
+        return;
+    }
+  }, {});
+
+  const messages = buildMiniMessages(props.state);
+  const estimatedContentHeight =
+    estimateMiniMessagesHeight(messages, props.state, transcriptContentWidth) + 4;
+  if (estimatedContentHeight > transcriptHeight - 2) {
+    props.state.scrollbarVisible = true;
+  }
+  const showScrollbar = props.state.scrollbarVisible && !props.state.loading;
+
+  return (
+    <box
+      position="absolute"
+      top={0}
+      left={0}
+      width={screenWidth}
+      height={screenHeight}
+      justifyContent="center"
+      alignItems="center"
+    >
+      <box
+        position="absolute"
+        top={0}
+        left={0}
+        width={screenWidth}
+        height={screenHeight}
+        backgroundColor="#000000"
+        opacity={0.65}
+      />
+      <box
+        width={panelWidth}
+        height={panelHeight}
+        flexDirection="column"
+        gap={1}
+        paddingBottom={2}
+        paddingLeft={2}
+        paddingRight={2}
+        backgroundColor={theme.backgroundPanel}
+        border
+        borderColor={theme.border}
+      >
+        <text fg={theme.text}>
+          <b>{props.title}</b>
+        </text>
+        <HintBar api={props.api} />
+        <box
+          border
+          borderColor={theme.backgroundElement}
+          height={transcriptHeight}
+          width={transcriptWidth + 2}
+        >
+          <scrollbox
+            ref={(node) => {
+              scroller = node;
+              props.onScroller?.(node);
+            }}
+            height={transcriptHeight - 2}
+            width={transcriptWidth}
+            scrollY
+            stickyScroll={false}
+            verticalScrollbarOptions={{ visible: showScrollbar }}
+          >
+            <box
+              flexDirection="column"
+              gap={1}
+              width={transcriptContentWidth}
+              paddingTop={1}
+              paddingBottom={0}
+              paddingLeft={2}
+              paddingRight={2}
+            >
+              {messages.length > 0 ? (
+                messages.map((message) => (
+                  <box flexDirection="column" gap={0}>
+                    <text
+                      fg={
+                        message.role === "assistant"
+                          ? theme.primary
+                          : theme.textMuted
+                      }
+                    >
+                      <b>{message.role}</b>
+                    </text>
+                    {message.parts.map((part, index) => (
+                      <box marginTop={getMiniPartTopMargin(message.parts, index)}>
+                        <text fg={getMiniPartColor(theme, part)}>
+                          {formatMiniPart(part)}
+                        </text>
+                      </box>
+                    ))}
+                  </box>
+                ))
+              ) : (
+                <text fg={theme.textMuted}>{THINKING_TEXT}</text>
+              )}
+              {props.state.error ? (
+                <text fg={theme.error}>Error: {props.state.error}</text>
+              ) : null}
+              {props.state.loading && messages.length > 0 ? (
+                <text fg={theme.textMuted}>{THINKING_TEXT}</text>
+              ) : null}
+              <box height={1} />
+            </box>
+          </scrollbox>
+        </box>
+        <box
+          flexDirection="row"
+          justifyContent="space-between"
+          width={transcriptWidth + 2}
+        >
+          <box flexDirection="row" gap={1}>
+            <ActionButton
+              api={props.api}
+              label="Continue In Main Thread"
+              primary
+              disabled={!props.canContinue}
+              onPress={props.onContinue}
+            />
+            <ActionButton api={props.api} label="Close" onPress={props.onClose} />
+          </box>
+          <text fg={theme.textMuted}>{props.modelName}</text>
+        </box>
+      </box>
+    </box>
+  );
+}
+
+function buildMiniMessages(state: AnswerDialogState): MiniMessage[] {
+  const messages = state.entries
+    .map((entry) => ({
+      id: entry.info.id,
+      role: entry.info.role,
+      parts: entry.parts
+        .map(toMiniPart)
+        .filter((part): part is MiniPart => Boolean(part)),
+    }))
+    .filter((message) => message.parts.length > 0);
+
+  if (!state.streamingAnswer) return messages;
+
+  const lastAssistant = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant");
+
+  if (!lastAssistant) {
+    messages.push({
+      id: "streaming-assistant",
+      role: "assistant",
+      parts: [{ type: "text", text: state.streamingAnswer }],
+    });
+    return messages;
+  }
+
+  const lastText = [...lastAssistant.parts]
+    .reverse()
+    .find((part): part is Extract<MiniPart, { type: "text" }> => part.type === "text");
+
+  if (lastText) {
+    lastText.text += state.streamingAnswer;
+  } else {
+    lastAssistant.parts.push({ type: "text", text: state.streamingAnswer });
+  }
+
+  return messages;
+}
+
+function estimateMiniMessagesHeight(
+  messages: MiniMessage[],
+  state: AnswerDialogState,
+  width: number,
+) {
+  let lines = 0;
+  for (const message of messages) {
+    lines += 1;
+    for (const part of message.parts) {
+      lines += estimateWrappedLines(formatMiniPart(part), width);
+    }
+    lines += 1;
+  }
+  if (state.error) lines += estimateWrappedLines(`Error: ${state.error}`, width);
+  if (state.loading && messages.length > 0) lines += 1;
+  if (messages.length === 0) lines += 1;
+  return lines;
+}
+
+function estimateWrappedLines(text: string, width: number) {
+  const lineWidth = Math.max(1, width);
+  return text
+    .split("\n")
+    .reduce(
+      (count, line) => count + Math.max(1, Math.ceil(line.length / lineWidth)),
+      0,
+    );
+}
+
+function getMiniPartTopMargin(parts: MiniPart[], index: number) {
+  if (index === 0) return 0;
+  const previous = parts[index - 1];
+  const current = parts[index];
+  return current.type === "text" && previous.type !== "text" ? 1 : 0;
+}
+
+function toMiniPart(part: Part): MiniPart | undefined {
+  if (part.type === "text" && part.text.trim())
+    return { type: "text", text: part.text.trim() };
+  if (part.type === "reasoning" && part.text.trim())
+    return { type: "reasoning", text: part.text.trim() };
+  if (part.type === "tool") {
+    const title =
+      "title" in part.state && typeof part.state.title === "string"
+        ? part.state.title
+        : part.tool;
+    const label = title === part.tool ? part.tool : `${part.tool}: ${title}`;
+    return {
+      type: "tool",
+      status: part.state.status,
+      text: `${label} ${formatToolStatus(part)}`,
+    };
+  }
+  if (part.type === "file")
+    return { type: "meta", text: `file: ${part.filename ?? part.url}` };
+  if (part.type === "agent")
+    return { type: "meta", text: `agent: ${part.name}` };
+  if (part.type === "patch")
+    return { type: "meta", text: `patch: ${part.files.join(", ")}` };
+  if (part.type === "retry")
+    return { type: "meta", text: `retry ${part.attempt}` };
+  return undefined;
+}
+
+function formatToolStatus(part: Extract<Part, { type: "tool" }>) {
+  switch (part.state.status) {
+    case "pending":
+      return "queued";
+    case "running":
+      return "running";
+    case "error":
+      return `failed: ${part.state.error}`;
+    default:
+      return "completed";
+  }
+}
+
+function formatMiniPart(part: MiniPart) {
+  if (part.type === "reasoning") return `thinking: ${part.text}`;
+  return part.text;
+}
+
+function getMiniPartColor(
+  theme: TuiPluginApi["theme"]["current"],
+  part: MiniPart,
+) {
+  if (part.type === "reasoning") return theme.textMuted;
+  if (part.type === "meta") return theme.textMuted;
+  if (part.type === "tool" && part.status === "error") return theme.error;
+  if (part.type === "tool" && part.status === "running") return theme.info;
+  if (part.type === "tool") return theme.textMuted;
+  return theme.text;
+}
+
+export function createOverlaySlot(getOverlay: () => OverlayState | undefined) {
+  return () => {
+    const current = getOverlay();
+    return current ? <AnswerDialog {...current} /> : null;
+  };
+}

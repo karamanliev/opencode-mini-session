@@ -1,7 +1,8 @@
 {
-  "name": "opencode-btw",
+  "name": "opencode-btw-plus",
   "private": true,
   "type": "module",
+  "main": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
