@@ -264,15 +264,17 @@ function toMiniPart(part: Part): MiniPart | undefined {
   if (part.type === "reasoning" && part.text.trim())
     return { type: "reasoning", text: part.text.trim() };
   if (part.type === "tool") {
-    const title =
+    const toolName = part.tool.charAt(0).toUpperCase() + part.tool.slice(1);
+    const inputSummary = summarizeToolInput(part.state.input);
+    const stateTitle =
       "title" in part.state && typeof part.state.title === "string"
         ? part.state.title
-        : part.tool;
-    const label = title === part.tool ? part.tool : `${part.tool}: ${title}`;
+        : undefined;
+    const detail = inputSummary || stateTitle;
     return {
       type: "tool",
       status: part.state.status,
-      text: `${label} ${formatToolStatus(part)}`,
+      text: detail ? `→ ${toolName} ${detail}` : `→ ${toolName}`,
     };
   }
   if (part.type === "file")
@@ -286,18 +288,19 @@ function toMiniPart(part: Part): MiniPart | undefined {
   return undefined;
 }
 
-function formatToolStatus(part: Extract<Part, { type: "tool" }>) {
-  switch (part.state.status) {
-    case "pending":
-      return "queued";
-    case "running":
-      return "running";
-    case "error":
-      return `failed: ${part.state.error}`;
-    default:
-      return "completed";
-  }
+function summarizeToolInput(input: { [key: string]: unknown } | undefined): string {
+  if (!input) return "";
+  const entries = Object.entries(input).slice(0, 2);
+  if (entries.length === 0) return "";
+  return entries
+    .map(([, value]) => {
+      const str = typeof value === "string" ? value : String(value);
+      return str.length > 60 ? `${str.slice(0, 57)}...` : str;
+    })
+    .join(" ");
 }
+
+
 
 function formatMiniPart(part: MiniPart) {
   if (part.type === "reasoning") return `thinking: ${part.text}`;
