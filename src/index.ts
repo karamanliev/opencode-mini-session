@@ -6,6 +6,7 @@ import {
   CMD_BLOCK_INPUT,
   CMD_CLOSE,
   CMD_CONTINUE,
+  CMD_HIDE,
   CMD_OPEN,
   CMD_PAGE_DOWN,
   CMD_PAGE_UP,
@@ -18,7 +19,7 @@ import {
   SCROLL_PAGE_DELTA,
 } from "./constants";
 import { openBtw } from "./session";
-import type { OverlayState } from "./types";
+import type { ActiveDialogController, OverlayState } from "./types";
 
 const tui: TuiPlugin = async (api, options) => {
   const config = parseConfig(options);
@@ -26,9 +27,9 @@ const tui: TuiPlugin = async (api, options) => {
     undefined,
     { equals: false },
   );
-  let activeCleanup: (() => Promise<void>) | undefined;
+  let activeDialog: ActiveDialogController | undefined;
 
-  api.lifecycle.onDispose(() => activeCleanup?.());
+  api.lifecycle.onDispose(() => activeDialog?.close());
 
   api.slots.register({
     slots: { app: createOverlaySlot(overlay) },
@@ -45,6 +46,7 @@ const tui: TuiPlugin = async (api, options) => {
     priority: 1000,
     enabled: () => Boolean(overlay()),
     commands: [
+      { name: CMD_HIDE, run: () => overlay()?.onHide() },
       { name: CMD_CLOSE, run: () => overlay()?.onClose() },
       { name: CMD_CONTINUE, run: () => overlay()?.onContinue() },
       { name: CMD_SCROLL_UP, run: () => overlay()?.scrollBy(-SCROLL_LINE_DELTA) },
@@ -59,6 +61,7 @@ const tui: TuiPlugin = async (api, options) => {
       { name: CMD_BLOCK_INPUT, run: () => undefined },
     ],
     bindings: [
+      { key: "h", cmd: CMD_HIDE },
       { key: "escape", cmd: CMD_CLOSE },
       { key: "enter", cmd: CMD_CLOSE },
       { key: "return", cmd: CMD_CLOSE },
@@ -87,9 +90,9 @@ const tui: TuiPlugin = async (api, options) => {
         enabled: () => api.route.current.name === "session",
         run() {
           void openBtw(api, config, setOverlay, {
-            get: () => activeCleanup,
-            set: (cleanup) => {
-              activeCleanup = cleanup;
+            get: () => activeDialog,
+            set: (dialog) => {
+              activeDialog = dialog;
             },
           });
         },

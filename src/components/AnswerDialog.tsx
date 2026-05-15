@@ -150,6 +150,7 @@ export function AnswerDialog(props: AnswerDialogProps) {
               disabled={!props.canContinue}
               onPress={props.onContinue}
             />
+            <ActionButton api={props.api} label="Hide" onPress={props.onHide} />
             <ActionButton api={props.api} label="Close" onPress={props.onClose} />
           </box>
           <text fg={theme.textMuted}>{props.modelName}</text>

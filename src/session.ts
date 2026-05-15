@@ -24,7 +24,11 @@ export async function openBtw(
     return;
   }
 
-  await active.get()?.();
+  const activeDialog = active.get();
+  if (activeDialog) {
+    activeDialog.show();
+    return;
+  }
 
   const { sessionID } = currentRoute.params as { sessionID: string };
   const title = "btw";
@@ -71,14 +75,21 @@ export async function startQuestion(
   const unsubscribers: Array<() => void> = [];
   let tempSessionID: string | undefined;
   let closed = false;
+  let hidden = false;
   let continuing = false;
   let renderTimer: ReturnType<typeof setTimeout> | undefined;
   let overlayScroller: ScrollBoxRenderable | undefined;
 
+  const hide = () => {
+    if (closed || hidden) return;
+    hidden = true;
+    setOverlay(undefined);
+  };
+
   const cleanup = async () => {
     if (closed) return;
     closed = true;
-    if (active.get() === cleanup) active.set(undefined);
+    if (active.get() === controller) active.set(undefined);
     while (unsubscribers.length > 0) {
       try {
         unsubscribers.pop()?.();
@@ -136,6 +147,7 @@ export async function startQuestion(
       clearTimeout(renderTimer);
       renderTimer = undefined;
     }
+    if (hidden) return;
     api.ui.dialog.clear();
     setOverlay({
       api,
@@ -152,11 +164,25 @@ export async function startQuestion(
       onScroller: (scroller) => {
         overlayScroller = scroller;
       },
+      onHide: () => hide(),
       onClose: () => void cleanup(),
       onContinue: () => void continueInMainThread(),
       scrollBy: (delta) => overlayScroller?.scrollBy(delta),
       scrollTo: (position) => overlayScroller?.scrollTo(position),
     });
+  };
+
+  const show = () => {
+    if (closed) return;
+    hidden = false;
+    renderOverlay();
+  };
+
+  const controller = {
+    close: cleanup,
+    hide,
+    show,
+    isVisible: () => !hidden,
   };
 
   const scheduleRenderOverlay = () => {
@@ -167,7 +193,7 @@ export async function startQuestion(
     }, 50);
   };
 
-  active.set(cleanup);
+  active.set(controller);
   renderOverlay();
 
   try {

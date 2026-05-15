@@ -23,8 +23,15 @@ export type ResolvedModel = {
 };
 
 export type ActiveDialog = {
-  get: () => (() => Promise<void>) | undefined;
-  set: (cleanup: (() => Promise<void>) | undefined) => void;
+  get: () => ActiveDialogController | undefined;
+  set: (dialog: ActiveDialogController | undefined) => void;
+};
+
+export type ActiveDialogController = {
+  close: () => Promise<void>;
+  hide: () => void;
+  show: () => void;
+  isVisible: () => boolean;
 };
 
 export type AnswerDialogState = {
@@ -42,6 +49,7 @@ export type AnswerDialogProps = {
   state: AnswerDialogState;
   canContinue: boolean;
   onScroller?: (scroller: ScrollBoxRenderable | undefined) => void;
+  onHide: () => void;
   onClose: () => void;
   onContinue: () => void;
 };

@@ -17,6 +17,8 @@ export function HintBar(props: { api: TuiPluginApi }) {
     <box flexDirection="row">
       {hint("c", "continue")}
       {separator()}
+      {hint("h", "hide")}
+      {separator()}
       {hint("enter/esc", "close")}
       {separator()}
       {hint("↑/↓", "scroll")}
