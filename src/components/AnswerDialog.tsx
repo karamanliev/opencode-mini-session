@@ -312,6 +312,7 @@ function buildMiniMessages(state: AnswerDialogState): MiniMessage[] {
       id: "streaming-assistant",
       role: "assistant",
       parts: [{ type: "text", text: state.streamingAnswer }],
+      modelName: undefined,
     });
     return messages;
   }
