@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { type ScrollBoxRenderable } from "@opentui/core";
+import { type ScrollBoxRenderable, SyntaxStyle } from "@opentui/core";
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { Part } from "@opencode-ai/sdk/v2";
 import { createMemo, Show } from "solid-js";
@@ -8,6 +8,33 @@ import type { AnswerDialogProps, AnswerDialogState, OverlayState } from "../type
 import { extractAssistantText } from "../session";
 import { ActionButton } from "./ActionButton";
 import { HintBar } from "./HintBar";
+
+function buildSyntaxStyle(theme: TuiPluginApi["theme"]["current"]): SyntaxStyle {
+  return SyntaxStyle.fromStyles({
+    // Markdown token styles
+    "markup.heading": { fg: theme.markdownHeading, bold: true },
+    "markup.strong": { fg: theme.markdownStrong, bold: true },
+    "markup.italic": { fg: theme.markdownEmph, italic: true },
+    "markup.link": { fg: theme.markdownLink },
+    "markup.link.label": { fg: theme.markdownLinkText },
+    "markup.link.url": { fg: theme.markdownLink },
+    "markup.raw": { fg: theme.markdownCode },
+    "markup.raw.block": { fg: theme.markdownCodeBlock },
+    "markup.strikethrough": { fg: theme.markdownText },
+    blockquote: { fg: theme.markdownBlockQuote },
+    conceal: { fg: theme.border, dim: true },
+    // Syntax highlighting in code blocks
+    comment: { fg: theme.syntaxComment },
+    keyword: { fg: theme.syntaxKeyword },
+    function: { fg: theme.syntaxFunction },
+    variable: { fg: theme.syntaxVariable },
+    string: { fg: theme.syntaxString },
+    number: { fg: theme.syntaxNumber },
+    type: { fg: theme.syntaxType },
+    operator: { fg: theme.syntaxOperator },
+    punctuation: { fg: theme.syntaxPunctuation },
+  });
+}
 
 type MiniPart =
   | { type: "text"; text: string }
@@ -23,6 +50,7 @@ type MiniMessage = {
 
 export function AnswerDialog(props: AnswerDialogProps) {
   const theme = props.api.theme.current;
+  const mdSyntaxStyle = buildSyntaxStyle(theme);
   let scroller: ScrollBoxRenderable | undefined;
 
   const screenWidth = props.api.renderer.width;
@@ -132,9 +160,21 @@ export function AnswerDialog(props: AnswerDialogProps) {
                     </text>
                     {message.parts.map((part, index) => (
                       <box marginTop={getMiniPartTopMargin(message.parts, index)}>
-                        <text fg={getMiniPartColor(theme, part)}>
-                          {formatMiniPart(part)}
-                        </text>
+                        {message.role === "assistant" &&
+                        part.type === "text" &&
+                        !props.state.loading ? (
+                          <markdown
+                            content={part.text}
+                            syntaxStyle={mdSyntaxStyle}
+                            fg={theme.markdownText}
+                            streaming={props.state.loading}
+                            width={transcriptContentWidth}
+                          />
+                        ) : (
+                          <text fg={getMiniPartColor(theme, part)}>
+                            {formatMiniPart(part)}
+                          </text>
+                        )}
                       </box>
                     ))}
                   </box>
