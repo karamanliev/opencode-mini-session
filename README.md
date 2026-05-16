@@ -63,6 +63,16 @@ All options are optional. Defaults are shown below.
 | `tokenLimit` | `number` | `50000` | Maximum tokens of session context to include. |
 | `keybind` | `string \| false` | `"alt+b"` | Global keybind. Set to `false` or `"none"` to disable. |
 
+## Session context
+
+The mini session receives the main session's conversation as plain text:
+
+- User questions
+- Assistant responses
+- Tool calls summarized inline (name + up to 4 input params, e.g. `[tool: read path=src/foo.ts]`)
+
+Oldest messages are dropped to fit the `tokenLimit`, and the result is injected into the system prompt inside `<session-context>` tags.
+
 ## Safe tools
 
 The ephemeral session always uses these read-only tools:
