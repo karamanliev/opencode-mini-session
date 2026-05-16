@@ -31,6 +31,7 @@ Press `alt+b` (or run `/mini` from the command palette) during any OpenCode sess
 |---|---|
 | `enter` | Send question / follow-up |
 | `alt+b` (configurable) | Hide overlay (resumable) |
+| `tab` | Change the model for the next question |
 | `esc` / `ctrl+c` | Cancel and close |
 
 ## Installation
