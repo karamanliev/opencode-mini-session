@@ -49,6 +49,7 @@ export async function openMiniSession(
   setOverlay: Setter<OverlayState | undefined>,
   active: ActiveDialog,
   modelPreference: ModelPreferenceState,
+  openPickerFn: (onAfterSelect: () => void) => void,
 ) {
   const currentRoute = api.route.current;
 
@@ -76,6 +77,7 @@ export async function openMiniSession(
     setOverlay,
     active,
     modelPreference,
+    openPickerFn,
   );
 }
 
@@ -87,6 +89,7 @@ export async function startQuestion(
   setOverlay: Setter<OverlayState | undefined>,
   active: ActiveDialog,
   modelPreference: ModelPreferenceState,
+  openPickerFn: (onAfterSelect: () => void) => void,
 ) {
   const entries = getSessionEntries(api, sessionID);
   const context = formatFullContext(entries, config.tokenLimit);
@@ -94,9 +97,8 @@ export async function startQuestion(
   const toolIDs = await getAvailableToolIDs(api);
   const permission = buildPermissionRules(toolIDs);
   const tools = buildToolSelection(toolIDs);
-  const selectedModel = modelPreference.get();
-  const resolvedModel = resolveModel(config.model, entries, selectedModel);
-  const modelName = formatResolvedModel(resolvedModel);
+  const getResolvedModel = () => resolveModel(config.model, entries, modelPreference.get());
+  const getModelName = () => formatResolvedModel(getResolvedModel());
   const hideKey = config.keybind || DEFAULT_KEYBIND;
   const previousFocus = api.renderer.currentFocusedRenderable;
 
@@ -105,7 +107,10 @@ export async function startQuestion(
     streamingAnswer: "",
     loading: false,
     scrollbarVisible: false,
+    messageModels: {},
   };
+
+  const submissionModelQueue: string[] = [];
 
   const unsubscribers: Array<() => void> = [];
   let tempSessionID: string | undefined;
@@ -255,7 +260,7 @@ export async function startQuestion(
     setOverlay({
       api,
       title,
-      modelName,
+      modelName: getModelName(),
       hideKey,
       state: dialogState,
       onScroller: (scroller) => {
@@ -267,6 +272,7 @@ export async function startQuestion(
       onHide: () => hide(),
       onClose: () => void closeFromUser(),
       onContinue: () => void continueInMainThread(),
+      onChangeModel: () => openPickerFn(() => renderOverlay({ focusInput: true })),
       onSubmit: submitPrompt,
       scrollBy: (delta) => overlayScroller?.scrollBy(delta),
       scrollTo: (position) => overlayScroller?.scrollTo(position),
@@ -321,10 +327,12 @@ export async function startQuestion(
     dialogState.error = undefined;
     dialogState.loading = true;
     dialogState.streamingAnswer = "";
+    submissionModelQueue.push(getModelName());
     renderOverlay({ focusInput: true });
 
     void (async () => {
       try {
+        const resolvedModel = getResolvedModel();
         await api.client.session.promptAsync(
           {
             sessionID: tempSessionID,
@@ -381,7 +389,15 @@ export async function startQuestion(
     unsubscribers.push(
       api.event.on("session.idle", (event) => {
         if (event.properties.sessionID !== tempSessionID) return;
+        const usedModel = submissionModelQueue.shift();
         refreshSession();
+        if (usedModel) {
+          for (const entry of dialogState.entries) {
+            if (entry.info.role === "assistant" && !dialogState.messageModels[entry.info.id]) {
+              dialogState.messageModels[entry.info.id] = usedModel;
+            }
+          }
+        }
         if (!extractAssistantText(dialogState.entries)) {
           dialogState.streamingAnswer = "No response generated.";
         }
@@ -439,6 +455,7 @@ export function openModelPicker(
   config: MiniConfig,
   sessionID: string,
   modelPreference: ModelPreferenceState,
+  onAfterSelect?: () => void,
 ) {
   const defaultModel = resolveModel(
     config.model,
@@ -473,6 +490,7 @@ export function openModelPicker(
           });
         }
         api.ui.dialog.clear();
+        onAfterSelect?.();
       },
     }),
   );

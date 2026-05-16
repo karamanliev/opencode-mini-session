@@ -46,6 +46,7 @@ export type AnswerDialogState = {
   loading: boolean;
   scrollbarVisible: boolean;
   error?: string;
+  messageModels: Record<string, string>;
 };
 
 export type AnswerDialogProps = {
@@ -59,6 +60,7 @@ export type AnswerDialogProps = {
   onHide: () => void;
   onClose: () => void;
   onContinue: () => void;
+  onChangeModel: () => void;
   onSubmit: (value: string) => boolean;
 };
 

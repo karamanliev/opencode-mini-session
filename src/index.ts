@@ -38,6 +38,7 @@ const tui: TuiPlugin = async (api, options) => {
     { equals: false },
   );
   let activeDialog: ActiveDialogController | undefined;
+  let modelPickerOpen = false;
 
   api.lifecycle.onDispose(() => activeDialog?.close());
 
@@ -50,8 +51,25 @@ const tui: TuiPlugin = async (api, options) => {
     enabled: () => Boolean(overlay()),
     commands: [
       { name: CMD_HIDE, run: () => overlay()?.onHide() },
-      { name: CMD_CLOSE, run: () => overlay()?.onClose() },
+      {
+        name: CMD_CLOSE,
+        run: () => {
+          if (modelPickerOpen) {
+            api.ui.dialog.clear();
+            modelPickerOpen = false;
+          } else {
+            overlay()?.onClose();
+          }
+        },
+      },
       { name: CMD_CONTINUE, run: () => overlay()?.onContinue() },
+      {
+        name: CMD_CHANGE_MODEL,
+        run: () => {
+          modelPickerOpen = true;
+          overlay()?.onChangeModel();
+        },
+      },
       { name: CMD_SCROLL_UP, run: () => overlay()?.scrollBy(-SCROLL_LINE_DELTA) },
       { name: CMD_SCROLL_DOWN, run: () => overlay()?.scrollBy(SCROLL_LINE_DELTA) },
       { name: CMD_PAGE_UP, run: () => overlay()?.scrollBy(-SCROLL_PAGE_DELTA) },
@@ -65,6 +83,7 @@ const tui: TuiPlugin = async (api, options) => {
     bindings: [
       { key: keybind, cmd: CMD_HIDE },
       { key: "shift+enter", cmd: CMD_CONTINUE },
+      { key: "tab", cmd: CMD_CHANGE_MODEL },
       { key: "escape", cmd: CMD_CLOSE },
       { key: "ctrl+c", cmd: CMD_CLOSE },
       { key: "pageup", cmd: CMD_PAGE_UP },
@@ -83,6 +102,9 @@ const tui: TuiPlugin = async (api, options) => {
         slashName: "mini",
         enabled: () => api.route.current.name === "session",
         run() {
+          const currentRoute = api.route.current;
+          if (currentRoute.name !== "session") return;
+          const { sessionID } = currentRoute.params as { sessionID: string };
           void openMiniSession(api, config, setOverlay, {
             get: () => activeDialog,
             set: (dialog) => {
@@ -91,7 +113,10 @@ const tui: TuiPlugin = async (api, options) => {
           }, {
             get: selectedModel,
             set: setSelectedModel,
-          });
+          }, (onAfterSelect) => openModelPicker(api, config, sessionID, { get: selectedModel, set: setSelectedModel }, () => {
+              modelPickerOpen = false;
+              onAfterSelect();
+            }));
         },
       },
       {
