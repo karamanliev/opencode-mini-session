@@ -121,7 +121,25 @@ export async function startQuestion(
   let hidden = false;
   let continuing = false;
   let renderTimer: ReturnType<typeof setTimeout> | undefined;
+  let scrollTimer: ReturnType<typeof setTimeout> | undefined;
   let overlayScroller: ScrollBoxRenderable | undefined;
+
+  const clearScrollTimer = () => {
+    if (!scrollTimer) return;
+    clearTimeout(scrollTimer);
+    scrollTimer = undefined;
+  };
+
+  const scheduleScrollToBottom = () => {
+    if (closed || hidden) return;
+    clearScrollTimer();
+    scrollTimer = setTimeout(() => {
+      scrollTimer = undefined;
+      if (closed || hidden) return;
+      overlayScroller?.scrollTo(Number.MAX_SAFE_INTEGER);
+      api.renderer.requestRender();
+    }, 0);
+  };
 
   const hide = () => {
     if (closed || hidden) return;
@@ -130,6 +148,7 @@ export async function startQuestion(
       clearTimeout(renderTimer);
       renderTimer = undefined;
     }
+    clearScrollTimer();
     setOverlay(undefined);
   };
 
@@ -143,6 +162,7 @@ export async function startQuestion(
       } catch {}
     }
     if (renderTimer) clearTimeout(renderTimer);
+    clearScrollTimer();
     setOverlay(undefined);
     if (!tempSessionID) return;
     const ephemeralSessionID = tempSessionID;
@@ -211,6 +231,7 @@ export async function startQuestion(
       scrollBy: (delta) => overlayScroller?.scrollBy(delta),
       scrollTo: (position) => overlayScroller?.scrollTo(position),
     });
+    if (dialogState.loading || dialogState.streamingAnswer) scheduleScrollToBottom();
   };
 
   const show = () => {
