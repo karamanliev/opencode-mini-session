@@ -1,5 +1,5 @@
 {
-  "name": "opencode-btw-plus",
+  "name": "opencode-mini-session",
   "private": true,
   "type": "module",
   "main": "src/index.ts",

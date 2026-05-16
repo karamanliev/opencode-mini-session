@@ -11,7 +11,7 @@ import { resolveModel, formatResolvedModel } from "./model";
 import type {
   ActiveDialog,
   AnswerDialogState,
-  BtwConfig,
+  MiniConfig,
   ModelPreferenceState,
   OverlayState,
   ResolvedModel,
@@ -25,7 +25,7 @@ type ModelSelectValue =
       variant?: string;
     };
 
-const BTW_AGENT = "general";
+const MINI_AGENT = "general";
 const SAFE_TOOL_PERMISSION_IDS = Object.keys(SAFE_TOOLS);
 const ADDITIONAL_PERMISSION_IDS = [
   "edit",
@@ -43,9 +43,9 @@ const ADDITIONAL_PERMISSION_IDS = [
   "skill",
 ];
 
-export async function openBtw(
+export async function openMiniSession(
   api: TuiPluginApi,
-  config: BtwConfig,
+  config: MiniConfig,
   setOverlay: Setter<OverlayState | undefined>,
   active: ActiveDialog,
   modelPreference: ModelPreferenceState,
@@ -55,7 +55,7 @@ export async function openBtw(
   if (currentRoute.name !== "session") {
     api.ui.toast({
       variant: "error",
-      message: "btw only works inside a session.",
+      message: "mini only works inside a session.",
     });
     return;
   }
@@ -67,7 +67,7 @@ export async function openBtw(
   }
 
   const { sessionID } = currentRoute.params as { sessionID: string };
-  const title = "btw";
+  const title = "mini";
   void startQuestion(
     api,
     config,
@@ -81,7 +81,7 @@ export async function openBtw(
 
 export async function startQuestion(
   api: TuiPluginApi,
-  config: BtwConfig,
+  config: MiniConfig,
   title: string,
   sessionID: string,
   setOverlay: Setter<OverlayState | undefined>,
@@ -174,7 +174,7 @@ export async function startQuestion(
     restorePreviousFocus();
     api.ui.toast({
       variant: "info",
-      message: `btw hidden. Press ${hideKey} to show it.`,
+      message: `mini hidden. Press ${hideKey} to show it.`,
       duration: 1000,
     });
   };
@@ -182,7 +182,7 @@ export async function startQuestion(
   const closeFromUser = async () => {
     api.ui.toast({
       variant: "info",
-      message: "btw mini-session closed.",
+      message: "mini session closed.",
       duration: 1000,
     });
     await cleanup();
@@ -313,7 +313,7 @@ export async function startQuestion(
     if (!tempSessionID) {
       api.ui.toast({
         variant: "warning",
-        message: "btw session is still opening.",
+        message: "mini session is still opening.",
       });
       return false;
     }
@@ -329,7 +329,7 @@ export async function startQuestion(
           {
             sessionID: tempSessionID,
             system,
-            agent: BTW_AGENT,
+            agent: MINI_AGENT,
             tools,
             parts: [{ type: "text", text: prompt }],
             ...(resolvedModel.model ? { model: resolvedModel.model } : {}),
@@ -353,9 +353,9 @@ export async function startQuestion(
   try {
     const created = await api.client.session.create(
       {
-        title: "btw (ephemeral)",
+        title: "mini session",
         directory: api.state.path.directory,
-        agent: BTW_AGENT,
+        agent: MINI_AGENT,
         permission,
       },
       { throwOnError: true },
@@ -436,7 +436,7 @@ export async function startQuestion(
 
 export function openModelPicker(
   api: TuiPluginApi,
-  config: BtwConfig,
+  config: MiniConfig,
   sessionID: string,
   modelPreference: ModelPreferenceState,
 ) {
@@ -449,15 +449,15 @@ export function openModelPicker(
   api.ui.dialog.setSize("large");
   api.ui.dialog.replace(() =>
     api.ui.DialogSelect<ModelSelectValue>({
-      title: "btw model",
-      placeholder: "Select model for future btw questions",
+      title: "mini model",
+      placeholder: "Select model for future mini-session questions",
       options,
       onSelect: (option) => {
         if (option.value.type === "default") {
           modelPreference.set(undefined);
           api.ui.toast({
             variant: "success",
-            message: "btw model reset to default.",
+            message: "mini model reset to default.",
           });
         } else {
           modelPreference.set({
@@ -466,7 +466,7 @@ export function openModelPicker(
           });
           api.ui.toast({
             variant: "success",
-            message: `btw model set to ${formatResolvedModel({
+            message: `mini model set to ${formatResolvedModel({
               model: option.value.model,
               variant: option.value.variant,
             })}.`,
@@ -487,7 +487,7 @@ function buildModelOptions(
       title: "Use default",
       value: { type: "default" },
       description: `Config model or main session model: ${formatResolvedModel(defaultModel)}`,
-      category: "btw",
+      category: "mini",
     },
   ];
 
@@ -605,7 +605,7 @@ function buildMiniSessionTranscript(state: AnswerDialogState) {
 }
 
 function buildContinuePrompt(transcript: string) {
-  return ["[Context from a btw mini-session]", transcript, "---\n"].join(
+  return ["[Context from a mini session]", transcript, "---\n"].join(
     "\n\n",
   );
 }

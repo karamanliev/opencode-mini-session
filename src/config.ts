@@ -1,7 +1,7 @@
 import { DEFAULT_FULL_TOKEN_LIMIT, DEFAULT_KEYBIND } from "./constants";
-import type { BtwConfig } from "./types";
+import type { MiniConfig } from "./types";
 
-export function parseConfig(options: unknown): BtwConfig {
+export function parseConfig(options: unknown): MiniConfig {
   const input =
     options && typeof options === "object"
       ? (options as Record<string, unknown>)

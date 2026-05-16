@@ -1,17 +1,16 @@
-export const PLUGIN_ID = "local.opencode-btw-plus";
+export const PLUGIN_ID = "local.opencode-mini-session";
 
-export const CMD_OPEN = "btw.open";
-export const CMD_HIDE = "btw.hide";
-export const CMD_CLOSE = "btw.close";
-export const CMD_CONTINUE = "btw.continue";
-export const CMD_CHANGE_MODEL = "btw.change-model";
-export const CMD_SCROLL_UP = "btw.scroll-up";
-export const CMD_SCROLL_DOWN = "btw.scroll-down";
-export const CMD_PAGE_UP = "btw.page-up";
-export const CMD_PAGE_DOWN = "btw.page-down";
-export const CMD_SCROLL_TOP = "btw.scroll-top";
-export const CMD_SCROLL_BOTTOM = "btw.scroll-bottom";
-export const CMD_BLOCK_INPUT = "btw.block-input";
+export const CMD_OPEN = "mini.open";
+export const CMD_HIDE = "mini.hide";
+export const CMD_CLOSE = "mini.close";
+export const CMD_CONTINUE = "mini.continue";
+export const CMD_CHANGE_MODEL = "mini.change-model";
+export const CMD_SCROLL_UP = "mini.scroll-up";
+export const CMD_SCROLL_DOWN = "mini.scroll-down";
+export const CMD_PAGE_UP = "mini.page-up";
+export const CMD_PAGE_DOWN = "mini.page-down";
+export const CMD_SCROLL_TOP = "mini.scroll-top";
+export const CMD_SCROLL_BOTTOM = "mini.scroll-bottom";
 
 export const SCROLL_LINE_DELTA = 4;
 export const SCROLL_PAGE_DELTA = 14;

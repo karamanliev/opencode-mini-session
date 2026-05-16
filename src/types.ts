@@ -2,7 +2,7 @@ import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core";
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { Message, Part } from "@opencode-ai/sdk/v2";
 
-export type BtwConfig = {
+export type MiniConfig = {
   model: string | null;
   tokenLimit: number;
   keybind: string | false;

@@ -19,7 +19,7 @@ import {
   SCROLL_LINE_DELTA,
   SCROLL_PAGE_DELTA,
 } from "./constants";
-import { openBtw, openModelPicker } from "./session";
+import { openMiniSession, openModelPicker } from "./session";
 import type {
   ActiveDialogController,
   ModelPreference,
@@ -76,13 +76,13 @@ const tui: TuiPlugin = async (api, options) => {
       {
         namespace: "palette",
         name: CMD_OPEN,
-        title: "btw",
-        desc: "Ask a side question with full session context",
+        title: "mini",
+        desc: "Open a mini session for side questions",
         category: "Plugin",
-        slashName: "btw",
+        slashName: "mini",
         enabled: () => api.route.current.name === "session",
         run() {
-          void openBtw(api, config, setOverlay, {
+          void openMiniSession(api, config, setOverlay, {
             get: () => activeDialog,
             set: (dialog) => {
               activeDialog = dialog;
@@ -96,10 +96,10 @@ const tui: TuiPlugin = async (api, options) => {
       {
         namespace: "palette",
         name: CMD_CHANGE_MODEL,
-        title: "btw model",
-        desc: "Change the model for future btw side questions",
+        title: "mini model",
+        desc: "Change the model for future mini-session questions",
         category: "Plugin",
-        slashName: "btw-model",
+        slashName: "mini-model",
         enabled: () => api.route.current.name === "session",
         run() {
           const currentRoute = api.route.current;
@@ -112,7 +112,7 @@ const tui: TuiPlugin = async (api, options) => {
         },
       },
     ],
-    bindings: [{ key: keybind, cmd: CMD_OPEN, desc: "Ask a btw side question" }],
+    bindings: [{ key: keybind, cmd: CMD_OPEN, desc: "Open a mini session" }],
   });
 };
 
