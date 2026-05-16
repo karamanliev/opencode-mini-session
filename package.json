@@ -2,7 +2,12 @@
   "name": "opencode-mini-session",
   "version": "0.1.2",
   "type": "module",
-  "main": "src/index.ts",
+  "exports": {
+    "./tui": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/karamanliev/opencode-mini-session"
