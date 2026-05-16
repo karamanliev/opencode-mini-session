@@ -1,12 +1,21 @@
 import type { ResolvedModel, SessionEntry } from "./types";
 
+export type ModelSource = "config" | "session" | "unknown";
+
+export type ResolvedModelWithSource = {
+  model: ResolvedModel;
+  source: ModelSource;
+};
+
 export function resolveModel(
   modelOverride: string | null,
   entries: SessionEntry[],
-  selectedModel?: ResolvedModel,
-): ResolvedModel {
-  if (selectedModel?.model) return selectedModel;
-  if (modelOverride) return { model: parseModelOverride(modelOverride) };
+): ResolvedModelWithSource {
+  if (modelOverride)
+    return {
+      model: { model: parseModelOverride(modelOverride) },
+      source: "config",
+    };
 
   let assistantFallback: ResolvedModel | undefined;
 
@@ -15,10 +24,13 @@ export function resolveModel(
     if (info.role === "user") {
       return {
         model: {
-          providerID: info.model.providerID,
-          modelID: info.model.modelID,
+          model: {
+            providerID: info.model.providerID,
+            modelID: info.model.modelID,
+          },
+          variant: info.model.variant,
         },
-        variant: info.model.variant,
+        source: "session",
       };
     }
 
@@ -33,9 +45,10 @@ export function resolveModel(
     }
   }
 
-  if (assistantFallback) return assistantFallback;
+  if (assistantFallback)
+    return { model: assistantFallback, source: "session" };
 
-  return {};
+  return { model: {}, source: "unknown" };
 }
 
 export function parseModelOverride(value: string) {

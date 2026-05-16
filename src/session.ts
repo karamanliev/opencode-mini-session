@@ -7,7 +7,7 @@ import type { PermissionRuleset } from "@opencode-ai/sdk/v2";
 import type { Setter } from "solid-js";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_KEYBIND } from "./constants";
 import { getSessionEntries, formatFullContext } from "./context";
-import { resolveModel, formatResolvedModel } from "./model";
+import { resolveModel, formatResolvedModel, type ModelSource } from "./model";
 import type {
   ActiveDialog,
   AnswerDialogState,
@@ -97,7 +97,8 @@ export async function startQuestion(
   const system = buildSystemPrompt(context, resolvedTools);
   const permission = buildPermissionRules(toolIDs, resolvedTools);
   const tools = buildToolSelection(toolIDs, resolvedTools);
-  const getResolvedModel = () => resolveModel(config.model, entries, modelPreference.get());
+  const getResolvedModel = () =>
+    modelPreference.get() ?? resolveModel(config.model, entries).model;
   const getModelName = () => formatResolvedModel(getResolvedModel());
   const hideKey = config.keybind || DEFAULT_KEYBIND;
   const previousFocus = api.renderer.currentFocusedRenderable;
@@ -272,7 +273,8 @@ export async function startQuestion(
       onHide: () => hide(),
       onClose: () => void closeFromUser(),
       onContinue: () => void continueInMainThread(),
-      onChangeModel: () => openPickerFn(() => renderOverlay({ focusInput: true })),
+      onChangeModel: () =>
+        openPickerFn(() => renderOverlay({ focusInput: true })),
       onSubmit: submitPrompt,
       scrollBy: (delta) => overlayScroller?.scrollBy(delta),
       scrollTo: (position) => overlayScroller?.scrollTo(position),
@@ -393,7 +395,10 @@ export async function startQuestion(
         refreshSession();
         if (usedModel) {
           for (const entry of dialogState.entries) {
-            if (entry.info.role === "assistant" && !dialogState.messageModels[entry.info.id]) {
+            if (
+              entry.info.role === "assistant" &&
+              !dialogState.messageModels[entry.info.id]
+            ) {
               dialogState.messageModels[entry.info.id] = usedModel;
             }
           }
@@ -457,11 +462,11 @@ export function openModelPicker(
   modelPreference: ModelPreferenceState,
   onAfterSelect?: () => void,
 ) {
-  const defaultModel = resolveModel(
+  const { model: defaultModel, source: defaultSource } = resolveModel(
     config.model,
     getSessionEntries(api, sessionID),
   );
-  const options = buildModelOptions(api, defaultModel);
+  const options = buildModelOptions(api, defaultModel, defaultSource);
 
   api.ui.dialog.setSize("large");
   api.ui.dialog.replace(() =>
@@ -499,19 +504,33 @@ export function openModelPicker(
 function buildModelOptions(
   api: TuiPluginApi,
   defaultModel: ResolvedModel,
+  defaultSource: ModelSource,
 ): TuiDialogSelectOption<ModelSelectValue>[] {
-  const options: TuiDialogSelectOption<ModelSelectValue>[] = [
-    {
-      title: "Use default",
-      value: { type: "default" },
-      description: `Config model or main session model: ${formatResolvedModel(defaultModel)}`,
-      category: "mini",
-    },
-  ];
-
   const providers = [...api.state.provider].sort((left, right) =>
     left.name.localeCompare(right.name),
   );
+
+  const defaultModelName = defaultModel.model
+    ? providers
+        .find((p) => p.id === defaultModel.model!.providerID)
+        ?.models[defaultModel.model!.modelID]?.name ||
+      defaultModel.model!.modelID
+    : "default";
+
+  const sourceLabel: Record<ModelSource, string> = {
+    config: "config",
+    session: "main session",
+    unknown: "unknown",
+  };
+
+  const options: TuiDialogSelectOption<ModelSelectValue>[] = [
+    {
+      title: defaultModelName + (defaultModel.variant ? ` (${defaultModel.variant})` : ""),
+      value: { type: "default" },
+      description: `${formatResolvedModel(defaultModel)}`,
+      category: `Default [${sourceLabel[defaultSource]}]`,
+    },
+  ];
 
   for (const provider of providers) {
     const models = Object.values(provider.models).sort((left, right) =>
@@ -596,14 +615,14 @@ async function getAvailableToolIDs(api: TuiPluginApi): Promise<string[]> {
 
 function buildToolSelection(toolIDs: string[], allowedTools: string[]) {
   return Object.fromEntries(
-    toolIDs.map((toolID) => [
-      toolID,
-      allowedTools.includes(toolID),
-    ]),
+    toolIDs.map((toolID) => [toolID, allowedTools.includes(toolID)]),
   );
 }
 
-function buildPermissionRules(toolIDs: string[], allowedTools: string[]): PermissionRuleset {
+function buildPermissionRules(
+  toolIDs: string[],
+  allowedTools: string[],
+): PermissionRuleset {
   const permissionIDs = [
     ...new Set([...toolIDs, ...ADDITIONAL_PERMISSION_IDS]),
   ];
