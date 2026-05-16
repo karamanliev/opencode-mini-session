@@ -12,28 +12,32 @@ type ActionButtonProps = {
 export function ActionButton(props: ActionButtonProps) {
   const theme = props.api.theme.current;
 
-  const backgroundColor = props.disabled
-    ? theme.backgroundElement
-    : props.primary
-      ? theme.primary
-      : theme.backgroundElement;
-
-  const foregroundColor = props.disabled
-    ? theme.textMuted
-    : props.primary
-      ? theme.selectedListItemText
-      : theme.text;
-
   return (
     <box
-      backgroundColor={backgroundColor}
+      backgroundColor={
+        props.disabled
+          ? theme.backgroundElement
+          : props.primary
+            ? theme.primary
+            : theme.backgroundElement
+      }
       paddingLeft={1}
       paddingRight={1}
       onMouseUp={() => {
         if (!props.disabled) props.onPress();
       }}
     >
-      <text fg={foregroundColor}>{props.label}</text>
+      <text
+        fg={
+          props.disabled
+            ? theme.textMuted
+            : props.primary
+              ? theme.selectedListItemText
+              : theme.text
+        }
+      >
+        {props.label}
+      </text>
     </box>
   );
 }
