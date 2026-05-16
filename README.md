@@ -33,26 +33,22 @@ Press `alt+b` (or run `/mini` from the command palette) during any OpenCode sess
 
 ## Installation
 
-Add the plugin to your OpenCode TUI config (usually `~/.config/opencode/tui.json`):
+Add to your OpenCode TUI config (`~/.config/opencode/tui.json`):
 
 ```json
 {
   "plugins": [
-    ["/path/to/opencode-mini-session/src/index.ts", {
-      "model": null,
+    ["opencode-mini-session", {
+      "model": "anthropic/claude-sonnet-4.6",
       "tokenLimit": 50000,
       "keybind": "alt+b"
     }]
   ]
 }
+
 ```
 
-Then install dependencies:
-
-```sh
-cd /path/to/opencode-mini-session
-bun install
-```
+OpenCode installs it automatically with Bun on startup.
 
 ## Configuration
 
