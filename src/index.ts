@@ -3,7 +3,6 @@ import { createSignal } from "solid-js";
 import { createOverlaySlot } from "./components/AnswerDialog";
 import { parseConfig } from "./config";
 import {
-  CMD_BLOCK_INPUT,
   CMD_CHANGE_MODEL,
   CMD_CLOSE,
   CMD_CONTINUE,
@@ -15,6 +14,7 @@ import {
   CMD_SCROLL_DOWN,
   CMD_SCROLL_TOP,
   CMD_SCROLL_UP,
+  DEFAULT_KEYBIND,
   PLUGIN_ID,
   SCROLL_LINE_DELTA,
   SCROLL_PAGE_DELTA,
@@ -28,6 +28,7 @@ import type {
 
 const tui: TuiPlugin = async (api, options) => {
   const config = parseConfig(options);
+  const keybind = config.keybind || DEFAULT_KEYBIND;
   const [overlay, setOverlay] = createSignal<OverlayState | undefined>(
     undefined,
     { equals: false },
@@ -42,13 +43,6 @@ const tui: TuiPlugin = async (api, options) => {
 
   api.slots.register({
     slots: { app: createOverlaySlot(overlay) },
-  });
-
-  api.keymap.registerSequencePattern({
-    name: "btw-any-key",
-    min: 1,
-    max: 1,
-    match: (event) => ({ value: event.name }),
   });
 
   api.keymap.registerLayer({
@@ -67,23 +61,13 @@ const tui: TuiPlugin = async (api, options) => {
         name: CMD_SCROLL_BOTTOM,
         run: () => overlay()?.scrollTo(Number.MAX_SAFE_INTEGER),
       },
-      { name: CMD_BLOCK_INPUT, run: () => undefined },
     ],
     bindings: [
-      { key: "h", cmd: CMD_HIDE },
+      { key: keybind, cmd: CMD_HIDE },
       { key: "escape", cmd: CMD_CLOSE },
-      { key: "enter", cmd: CMD_CLOSE },
-      { key: "return", cmd: CMD_CLOSE },
-      { key: "c", cmd: CMD_CONTINUE },
-      { key: "up", cmd: CMD_SCROLL_UP },
-      { key: "k", cmd: CMD_SCROLL_UP },
-      { key: "down", cmd: CMD_SCROLL_DOWN },
-      { key: "j", cmd: CMD_SCROLL_DOWN },
+      { key: "ctrl+c", cmd: CMD_CLOSE },
       { key: "pageup", cmd: CMD_PAGE_UP },
       { key: "pagedown", cmd: CMD_PAGE_DOWN },
-      { key: "home", cmd: CMD_SCROLL_TOP },
-      { key: "end", cmd: CMD_SCROLL_BOTTOM },
-      { key: "{btw-any-key}", cmd: CMD_BLOCK_INPUT },
     ],
   });
 
@@ -128,9 +112,7 @@ const tui: TuiPlugin = async (api, options) => {
         },
       },
     ],
-    bindings: config.keybind
-      ? [{ key: config.keybind, cmd: CMD_OPEN, desc: "Ask a btw side question" }]
-      : [],
+    bindings: [{ key: keybind, cmd: CMD_OPEN, desc: "Ask a btw side question" }],
   });
 };
 

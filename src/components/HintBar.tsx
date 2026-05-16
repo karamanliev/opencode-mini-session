@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 
-export function HintBar(props: { api: TuiPluginApi }) {
+export function HintBar(props: { api: TuiPluginApi; hideKey: string }) {
   const theme = props.api.theme.current;
 
   const hint = (key: string, label: string) => (
@@ -15,13 +15,11 @@ export function HintBar(props: { api: TuiPluginApi }) {
 
   return (
     <box flexDirection="row">
-      {hint("c", "continue")}
+      {hint("enter", "send")}
       {separator()}
-      {hint("h", "hide")}
+      {hint(props.hideKey, "hide")}
       {separator()}
-      {hint("enter/esc", "close")}
-      {separator()}
-      {hint("↑/↓", "scroll")}
+      {hint("esc/ctrl+c", "cancel")}
     </box>
   );
 }

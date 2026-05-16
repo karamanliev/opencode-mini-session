@@ -1,8 +1,11 @@
-import type { ScrollBoxRenderable } from "@opentui/core";
-import type { TuiDialogSelectOption, TuiPluginApi } from "@opencode-ai/plugin/tui";
+import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core";
+import type {
+  TuiDialogSelectOption,
+  TuiPluginApi,
+} from "@opencode-ai/plugin/tui";
 import type { PermissionRuleset } from "@opencode-ai/sdk/v2";
 import type { Setter } from "solid-js";
-import { SAFE_TOOLS } from "./constants";
+import { DEFAULT_KEYBIND, SAFE_TOOLS } from "./constants";
 import { getSessionEntries, formatFullContext } from "./context";
 import { resolveModel, formatResolvedModel } from "./model";
 import type {
@@ -16,7 +19,11 @@ import type {
 
 type ModelSelectValue =
   | { type: "default" }
-  | { type: "model"; model: NonNullable<ResolvedModel["model"]>; variant?: string };
+  | {
+      type: "model";
+      model: NonNullable<ResolvedModel["model"]>;
+      variant?: string;
+    };
 
 const BTW_AGENT = "general";
 const SAFE_TOOL_PERMISSION_IDS = Object.keys(SAFE_TOOLS);
@@ -46,7 +53,10 @@ export async function openBtw(
   const currentRoute = api.route.current;
 
   if (currentRoute.name !== "session") {
-    api.ui.toast({ variant: "error", message: "btw only works inside a session." });
+    api.ui.toast({
+      variant: "error",
+      message: "btw only works inside a session.",
+    });
     return;
   }
 
@@ -58,33 +68,14 @@ export async function openBtw(
 
   const { sessionID } = currentRoute.params as { sessionID: string };
   const title = "btw";
-  const entries = getSessionEntries(api, sessionID);
-  const currentModel = resolveModel(config.model, entries, modelPreference.get());
-
-  api.ui.dialog.setSize("medium");
-  api.ui.dialog.replace(() =>
-    api.ui.DialogPrompt({
-      title,
-      placeholder: `Ask a side question (${formatResolvedModel(currentModel)})`,
-      onCancel: () => api.ui.dialog.clear(),
-      onConfirm: (value) => {
-        const question = value.trim();
-        if (!question) {
-          api.ui.toast({ variant: "warning", message: "Enter a question first." });
-          return;
-        }
-        void startQuestion(
-          api,
-          config,
-          title,
-          sessionID,
-          question,
-          setOverlay,
-          active,
-          modelPreference,
-        );
-      },
-    }),
+  void startQuestion(
+    api,
+    config,
+    title,
+    sessionID,
+    setOverlay,
+    active,
+    modelPreference,
   );
 }
 
@@ -93,7 +84,6 @@ export async function startQuestion(
   config: BtwConfig,
   title: string,
   sessionID: string,
-  question: string,
   setOverlay: Setter<OverlayState | undefined>,
   active: ActiveDialog,
   modelPreference: ModelPreferenceState,
@@ -107,11 +97,13 @@ export async function startQuestion(
   const selectedModel = modelPreference.get();
   const resolvedModel = resolveModel(config.model, entries, selectedModel);
   const modelName = formatResolvedModel(resolvedModel);
+  const hideKey = config.keybind || DEFAULT_KEYBIND;
+  const previousFocus = api.renderer.currentFocusedRenderable;
 
   const dialogState: AnswerDialogState = {
     entries: [],
     streamingAnswer: "",
-    loading: true,
+    loading: false,
     scrollbarVisible: false,
   };
 
@@ -122,12 +114,31 @@ export async function startQuestion(
   let continuing = false;
   let renderTimer: ReturnType<typeof setTimeout> | undefined;
   let scrollTimer: ReturnType<typeof setTimeout> | undefined;
+  let focusTimer: ReturnType<typeof setTimeout> | undefined;
+  let overlayInput: InputRenderable | undefined;
   let overlayScroller: ScrollBoxRenderable | undefined;
 
   const clearScrollTimer = () => {
     if (!scrollTimer) return;
     clearTimeout(scrollTimer);
     scrollTimer = undefined;
+  };
+
+  const clearFocusTimer = () => {
+    if (!focusTimer) return;
+    clearTimeout(focusTimer);
+    focusTimer = undefined;
+  };
+
+  const scheduleInputFocus = () => {
+    if (closed || hidden) return;
+    clearFocusTimer();
+    focusTimer = setTimeout(() => {
+      focusTimer = undefined;
+      if (closed || hidden) return;
+      overlayInput?.focus();
+      api.renderer.requestRender();
+    }, 0);
   };
 
   const scheduleScrollToBottom = () => {
@@ -141,6 +152,15 @@ export async function startQuestion(
     }, 0);
   };
 
+  const restorePreviousFocus = () => {
+    setTimeout(() => {
+      if (previousFocus && !previousFocus.isDestroyed) {
+        previousFocus.focus();
+      }
+      api.renderer.requestRender();
+    }, 0);
+  };
+
   const hide = () => {
     if (closed || hidden) return;
     hidden = true;
@@ -149,7 +169,23 @@ export async function startQuestion(
       renderTimer = undefined;
     }
     clearScrollTimer();
+    clearFocusTimer();
     setOverlay(undefined);
+    restorePreviousFocus();
+    api.ui.toast({
+      variant: "info",
+      message: `btw hidden. Press ${hideKey} to show it.`,
+      duration: 1000,
+    });
+  };
+
+  const closeFromUser = async () => {
+    api.ui.toast({
+      variant: "info",
+      message: "btw mini-session closed.",
+      duration: 1000,
+    });
+    await cleanup();
   };
 
   const cleanup = async () => {
@@ -163,7 +199,9 @@ export async function startQuestion(
     }
     if (renderTimer) clearTimeout(renderTimer);
     clearScrollTimer();
+    clearFocusTimer();
     setOverlay(undefined);
+    restorePreviousFocus();
     if (!tempSessionID) return;
     const ephemeralSessionID = tempSessionID;
     tempSessionID = undefined;
@@ -182,19 +220,20 @@ export async function startQuestion(
   };
 
   const continueInMainThread = async () => {
-    const answer =
-      extractAssistantText(dialogState.entries) ||
-      dialogState.streamingAnswer.trim();
-    if (continuing || dialogState.loading || dialogState.error || !answer)
+    const transcript = buildMiniSessionTranscript(dialogState);
+    if (continuing || dialogState.loading || dialogState.error || !transcript)
       return;
     continuing = true;
 
     try {
       await api.client.tui.appendPrompt(
-        { text: buildContinuePrompt(question, answer) },
+        { text: buildContinuePrompt(transcript) },
         { throwOnError: true },
       );
-      api.ui.toast({ variant: "success", message: "Side answer added to prompt." });
+      api.ui.toast({
+        variant: "success",
+        message: "Side answer added to prompt.",
+      });
       await cleanup();
     } catch (cause) {
       api.ui.toast({
@@ -206,35 +245,41 @@ export async function startQuestion(
     }
   };
 
-  const renderOverlay = () => {
+  const renderOverlay = (options: { focusInput?: boolean } = {}) => {
     if (closed) return;
     if (renderTimer) {
       clearTimeout(renderTimer);
       renderTimer = undefined;
     }
     if (hidden) return;
-    api.ui.dialog.clear();
     setOverlay({
       api,
       title,
       modelName,
+      hideKey,
       state: dialogState,
       onScroller: (scroller) => {
         overlayScroller = scroller;
       },
+      onInput: (input) => {
+        overlayInput = input;
+      },
       onHide: () => hide(),
-      onClose: () => void cleanup(),
+      onClose: () => void closeFromUser(),
       onContinue: () => void continueInMainThread(),
+      onSubmit: submitPrompt,
       scrollBy: (delta) => overlayScroller?.scrollBy(delta),
       scrollTo: (position) => overlayScroller?.scrollTo(position),
     });
-    if (dialogState.loading || dialogState.streamingAnswer) scheduleScrollToBottom();
+    if (options.focusInput) scheduleInputFocus();
+    if (dialogState.loading || dialogState.streamingAnswer)
+      scheduleScrollToBottom();
   };
 
   const show = () => {
     if (closed) return;
     hidden = false;
-    renderOverlay();
+    renderOverlay({ focusInput: true });
   };
 
   const controller = {
@@ -253,7 +298,57 @@ export async function startQuestion(
   };
 
   active.set(controller);
-  renderOverlay();
+  renderOverlay({ focusInput: true });
+
+  function submitPrompt(value: string) {
+    const prompt = value.trim();
+    if (!prompt || closed) return false;
+    if (dialogState.loading) {
+      api.ui.toast({
+        variant: "warning",
+        message: "Wait for the current response.",
+      });
+      return false;
+    }
+    if (!tempSessionID) {
+      api.ui.toast({
+        variant: "warning",
+        message: "btw session is still opening.",
+      });
+      return false;
+    }
+
+    dialogState.error = undefined;
+    dialogState.loading = true;
+    dialogState.streamingAnswer = "";
+    renderOverlay({ focusInput: true });
+
+    void (async () => {
+      try {
+        await api.client.session.promptAsync(
+          {
+            sessionID: tempSessionID,
+            system,
+            agent: BTW_AGENT,
+            tools,
+            parts: [{ type: "text", text: prompt }],
+            ...(resolvedModel.model ? { model: resolvedModel.model } : {}),
+            ...(resolvedModel.variant
+              ? { variant: resolvedModel.variant }
+              : {}),
+          },
+          { throwOnError: true },
+        );
+      } catch (cause) {
+        if (closed) return;
+        dialogState.error = getErrorMessage(cause);
+        dialogState.loading = false;
+        renderOverlay();
+      }
+    })();
+
+    return true;
+  }
 
   try {
     const created = await api.client.session.create(
@@ -331,19 +426,6 @@ export async function startQuestion(
         renderOverlay();
       }),
     );
-
-    await api.client.session.promptAsync(
-      {
-        sessionID: ephemeralSessionID,
-        system,
-        agent: BTW_AGENT,
-        tools,
-        parts: [{ type: "text", text: question }],
-        ...(resolvedModel.model ? { model: resolvedModel.model } : {}),
-        ...(resolvedModel.variant ? { variant: resolvedModel.variant } : {}),
-      },
-      { throwOnError: true },
-    );
   } catch (cause) {
     if (closed) return;
     dialogState.error = getErrorMessage(cause);
@@ -373,7 +455,10 @@ export function openModelPicker(
       onSelect: (option) => {
         if (option.value.type === "default") {
           modelPreference.set(undefined);
-          api.ui.toast({ variant: "success", message: "btw model reset to default." });
+          api.ui.toast({
+            variant: "success",
+            message: "btw model reset to default.",
+          });
         } else {
           modelPreference.set({
             model: option.value.model,
@@ -468,7 +553,10 @@ async function getAvailableToolIDs(api: TuiPluginApi): Promise<string[]> {
       { directory: api.state.path.directory },
       { throwOnError: true },
     );
-    if (Array.isArray(result.data) && result.data.every((item) => typeof item === "string")) {
+    if (
+      Array.isArray(result.data) &&
+      result.data.every((item) => typeof item === "string")
+    ) {
       return result.data;
     }
   } catch {}
@@ -478,12 +566,17 @@ async function getAvailableToolIDs(api: TuiPluginApi): Promise<string[]> {
 
 function buildToolSelection(toolIDs: string[]) {
   return Object.fromEntries(
-    toolIDs.map((toolID) => [toolID, SAFE_TOOL_PERMISSION_IDS.includes(toolID)]),
+    toolIDs.map((toolID) => [
+      toolID,
+      SAFE_TOOL_PERMISSION_IDS.includes(toolID),
+    ]),
   );
 }
 
 function buildPermissionRules(toolIDs: string[]): PermissionRuleset {
-  const permissionIDs = [...new Set([...toolIDs, ...ADDITIONAL_PERMISSION_IDS])];
+  const permissionIDs = [
+    ...new Set([...toolIDs, ...ADDITIONAL_PERMISSION_IDS]),
+  ];
   return permissionIDs.map((permission) => ({
     permission,
     pattern: "*",
@@ -491,13 +584,30 @@ function buildPermissionRules(toolIDs: string[]): PermissionRuleset {
   }));
 }
 
-function buildContinuePrompt(question: string, answer: string) {
-  return [
-    "[Context from a one-shot aside session]",
-    `Question:\n${question}`,
-    `Answer:\n${answer}`,
-    "---\n",
-  ].join("\n\n");
+function buildMiniSessionTranscript(state: AnswerDialogState) {
+  const lines: string[] = [];
+
+  for (const entry of state.entries) {
+    const chunks: string[] = [];
+    for (const part of entry.parts) {
+      if (part.type === "text" && part.text.trim())
+        chunks.push(part.text.trim());
+    }
+    if (chunks.length > 0)
+      lines.push(`${entry.info.role}:\n${chunks.join("\n\n")}`);
+  }
+
+  if (state.streamingAnswer.trim()) {
+    lines.push(`assistant:\n${state.streamingAnswer.trim()}`);
+  }
+
+  return lines.join("\n\n").trim();
+}
+
+function buildContinuePrompt(transcript: string) {
+  return ["[Context from a btw mini-session]", transcript, "---\n"].join(
+    "\n\n",
+  );
 }
 
 function extractErrorMessage(error: unknown) {

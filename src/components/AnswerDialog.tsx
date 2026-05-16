@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { type ScrollBoxRenderable, SyntaxStyle } from "@opentui/core";
+import { type InputRenderable, type ScrollBoxRenderable, SyntaxStyle } from "@opentui/core";
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { Part } from "@opencode-ai/sdk/v2";
 import { createMemo, Show } from "solid-js";
@@ -52,6 +52,8 @@ export function AnswerDialog(props: AnswerDialogProps) {
   const theme = props.api.theme.current;
   const mdSyntaxStyle = buildSyntaxStyle(theme);
   let scroller: ScrollBoxRenderable | undefined;
+  let input: InputRenderable | undefined;
+  let inputValue = "";
 
   const screenWidth = props.api.renderer.width;
   const screenHeight = props.api.renderer.height;
@@ -60,7 +62,7 @@ export function AnswerDialog(props: AnswerDialogProps) {
     12,
     Math.min(screenHeight - 6, Math.floor(screenHeight * 0.68)),
   );
-  const transcriptHeight = Math.max(5, panelHeight - 7);
+  const transcriptHeight = Math.max(5, panelHeight - 9);
   const transcriptWidth = Math.max(20, panelWidth - 8);
   const transcriptContentWidth = Math.max(20, transcriptWidth - 5);
 
@@ -108,18 +110,20 @@ export function AnswerDialog(props: AnswerDialogProps) {
         width={panelWidth}
         height={panelHeight}
         flexDirection="column"
-        gap={1}
-        paddingBottom={2}
+        gap={0}
+        paddingBottom={1}
         paddingLeft={2}
         paddingRight={2}
         backgroundColor={theme.backgroundPanel}
         border
         borderColor={theme.border}
       >
-        <text fg={theme.text}>
-          <b>{props.title}</b>
-        </text>
-        <HintBar api={props.api} />
+        <box flexDirection="row" justifyContent="space-between" alignItems="center">
+          <text fg={theme.text}>
+            <b>{props.title}</b>
+          </text>
+          <HintBar api={props.api} hideKey={props.hideKey} />
+        </box>
         <box
           border
           borderColor={theme.backgroundElement}
@@ -179,8 +183,10 @@ export function AnswerDialog(props: AnswerDialogProps) {
                     ))}
                   </box>
                 ))
-              ) : (
+              ) : props.state.loading ? (
                 <text fg={theme.textMuted}>{THINKING_TEXT}</text>
+              ) : (
+                <text fg={theme.textMuted}>Ask a side question below.</text>
               )}
               {props.state.error ? (
                 <text fg={theme.error}>Error: {props.state.error}</text>
@@ -193,9 +199,43 @@ export function AnswerDialog(props: AnswerDialogProps) {
           </scrollbox>
         </box>
         <box
+          border
+          borderColor={theme.backgroundElement}
+          width={transcriptWidth + 2}
+          height={3}
+          paddingLeft={1}
+          paddingRight={1}
+        >
+          <input
+            ref={(node) => {
+              input = node;
+              props.onInput?.(node);
+            }}
+            width={Math.max(1, transcriptWidth - 2)}
+            placeholder={props.state.loading ? "Waiting for response..." : ""}
+            textColor={theme.text}
+            placeholderColor={theme.textMuted}
+            backgroundColor={theme.backgroundPanel}
+            focusedTextColor={theme.text}
+            focusedBackgroundColor={theme.backgroundPanel}
+            onInput={(value) => {
+              inputValue = value;
+            }}
+            onSubmit={() => {
+              const submitted = (input?.value || inputValue).trim();
+              if (!submitted || props.state.loading) return;
+              if (!props.onSubmit(submitted)) return;
+              inputValue = "";
+              if (input) input.value = "";
+            }}
+          />
+        </box>
+        <box
           flexDirection="row"
           justifyContent="space-between"
+          alignItems="center"
           width={transcriptWidth + 2}
+          marginTop={1}
         >
           <box flexDirection="row" gap={1}>
             <ActionButton
@@ -383,11 +423,14 @@ export function createOverlaySlot(getOverlay: () => OverlayState | undefined) {
             api={current().api}
             title={current().title}
             modelName={current().modelName}
+            hideKey={current().hideKey}
             state={current().state}
             onScroller={current().onScroller}
+            onInput={current().onInput}
             onHide={current().onHide}
             onClose={current().onClose}
             onContinue={current().onContinue}
+            onSubmit={current().onSubmit}
           />
         )}
       </Show>
