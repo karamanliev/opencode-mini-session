@@ -1,10 +1,11 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
+import { Show } from "solid-js";
 
 type ActionButtonProps = {
   api: TuiPluginApi;
   label: string;
-  primary?: boolean;
+  keybind?: string;
   disabled?: boolean;
   onPress: () => void;
 };
@@ -14,30 +15,17 @@ export function ActionButton(props: ActionButtonProps) {
 
   return (
     <box
-      backgroundColor={
-        props.disabled
-          ? theme.backgroundElement
-          : props.primary
-            ? theme.primary
-            : theme.backgroundElement
-      }
-      paddingLeft={1}
-      paddingRight={1}
+      flexDirection="row"
       onMouseUp={() => {
         if (!props.disabled) props.onPress();
       }}
     >
-      <text
-        fg={
-          props.disabled
-            ? theme.textMuted
-            : props.primary
-              ? theme.selectedListItemText
-              : theme.text
-        }
-      >
-        {props.label}
+      <text fg={props.disabled ? theme.textMuted : theme.text}>
+        <b>{props.label}</b>
       </text>
+      <Show when={props.keybind}>
+        <text fg={theme.textMuted}> {props.keybind}</text>
+      </Show>
     </box>
   );
 }

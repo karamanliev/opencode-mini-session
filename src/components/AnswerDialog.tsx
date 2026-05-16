@@ -1,15 +1,25 @@
 /** @jsxImportSource @opentui/solid */
-import { type InputRenderable, type ScrollBoxRenderable, SyntaxStyle } from "@opentui/core";
+import {
+  type InputRenderable,
+  type ScrollBoxRenderable,
+  SyntaxStyle,
+} from "@opentui/core";
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { Part } from "@opencode-ai/sdk/v2";
 import { createMemo, Show } from "solid-js";
 import { THINKING_TEXT } from "../constants";
-import type { AnswerDialogProps, AnswerDialogState, OverlayState } from "../types";
+import type {
+  AnswerDialogProps,
+  AnswerDialogState,
+  OverlayState,
+} from "../types";
 import { extractAssistantText } from "../session";
 import { ActionButton } from "./ActionButton";
 import { HintBar } from "./HintBar";
 
-function buildSyntaxStyle(theme: TuiPluginApi["theme"]["current"]): SyntaxStyle {
+function buildSyntaxStyle(
+  theme: TuiPluginApi["theme"]["current"],
+): SyntaxStyle {
   return SyntaxStyle.fromStyles({
     // Markdown token styles
     "markup.heading": { fg: theme.markdownHeading, bold: true },
@@ -62,14 +72,18 @@ export function AnswerDialog(props: AnswerDialogProps) {
     12,
     Math.min(screenHeight - 6, Math.floor(screenHeight * 0.68)),
   );
-  const transcriptHeight = Math.max(5, panelHeight - 9);
-  const transcriptWidth = Math.max(20, panelWidth - 8);
+  const transcriptHeight = Math.max(5, panelHeight - 10);
+  const transcriptWidth = Math.max(20, panelWidth - 6);
   const transcriptContentWidth = Math.max(20, transcriptWidth - 5);
 
   const messages = createMemo(() => buildMiniMessages(props.state));
   const estimatedContentHeight = createMemo(
     () =>
-      estimateMiniMessagesHeight(messages(), props.state, transcriptContentWidth) + 4,
+      estimateMiniMessagesHeight(
+        messages(),
+        props.state,
+        transcriptContentWidth,
+      ) + 4,
   );
   const contentOverflows = createMemo(
     () => estimatedContentHeight() > transcriptHeight - 2,
@@ -83,7 +97,7 @@ export function AnswerDialog(props: AnswerDialogProps) {
       !props.state.error &&
       Boolean(
         extractAssistantText(props.state.entries) ||
-          props.state.streamingAnswer.trim(),
+        props.state.streamingAnswer.trim(),
       ),
   );
 
@@ -110,46 +124,37 @@ export function AnswerDialog(props: AnswerDialogProps) {
         width={panelWidth}
         height={panelHeight}
         flexDirection="column"
-        gap={0}
-        paddingBottom={1}
-        paddingLeft={2}
-        paddingRight={2}
         backgroundColor={theme.backgroundPanel}
-        border
-        borderColor={theme.border}
       >
-        <box flexDirection="row" justifyContent="space-between" alignItems="center">
+        {/* header */}
+        <box
+          paddingTop={1}
+          paddingLeft={3}
+          paddingRight={3}
+          flexDirection="row"
+          justifyContent="space-between"
+          alignItems="center"
+          marginBottom={1}
+        >
           <text fg={theme.text}>
             <b>{props.title}</b>
           </text>
           <HintBar api={props.api} hideKey={props.hideKey} />
         </box>
-        <box
-          border
-          borderColor={theme.backgroundElement}
-          height={transcriptHeight}
-          width={transcriptWidth + 2}
-        >
+        {/* transcript */}
+        <box paddingLeft={3} paddingRight={3}>
           <scrollbox
             ref={(node) => {
               scroller = node;
               props.onScroller?.(node);
             }}
-            height={transcriptHeight - 2}
+            height={transcriptHeight}
             width={transcriptWidth}
             scrollY
             stickyScroll={false}
             verticalScrollbarOptions={{ visible: showScrollbar() }}
           >
-            <box
-              flexDirection="column"
-              gap={1}
-              width={transcriptContentWidth}
-              paddingTop={1}
-              paddingBottom={0}
-              paddingLeft={2}
-              paddingRight={2}
-            >
+            <box flexDirection="column" gap={1} width={transcriptContentWidth}>
               {messages().length > 0 ? (
                 messages().map((message) => (
                   <box flexDirection="column" gap={0}>
@@ -157,13 +162,15 @@ export function AnswerDialog(props: AnswerDialogProps) {
                       fg={
                         message.role === "assistant"
                           ? theme.primary
-                          : theme.textMuted
+                          : theme.secondary
                       }
                     >
                       <b>{message.role}</b>
                     </text>
                     {message.parts.map((part, index) => (
-                      <box marginTop={getMiniPartTopMargin(message.parts, index)}>
+                      <box
+                        marginTop={getMiniPartTopMargin(message.parts, index)}
+                      >
                         {message.role === "assistant" &&
                         part.type === "text" &&
                         !props.state.loading ? (
@@ -194,29 +201,38 @@ export function AnswerDialog(props: AnswerDialogProps) {
               {props.state.loading && messages().length > 0 ? (
                 <text fg={theme.textMuted}>{THINKING_TEXT}</text>
               ) : null}
-              <box height={1} />
             </box>
           </scrollbox>
         </box>
+        {/* separator */}
+        <text marginTop={1} fg={theme.borderSubtle}>
+          {"─".repeat(panelWidth)}
+        </text>
+        {/* input + actions */}
         <box
-          border
-          borderColor={theme.backgroundElement}
-          width={transcriptWidth + 2}
-          height={3}
-          paddingLeft={1}
-          paddingRight={1}
+          paddingLeft={3}
+          paddingRight={3}
+          paddingBottom={1}
+          flexDirection="column"
+          gap={1}
+          marginTop={1}
         >
           <input
             ref={(node) => {
               input = node;
               props.onInput?.(node);
             }}
-            width={Math.max(1, transcriptWidth - 2)}
-            placeholder={props.state.loading ? "Waiting for response..." : ""}
+            width={transcriptWidth}
+            placeholder={
+              props.state.loading
+                ? "Waiting for response..."
+                : "Ask a question..."
+            }
             textColor={theme.text}
             placeholderColor={theme.textMuted}
             backgroundColor={theme.backgroundPanel}
             focusedTextColor={theme.text}
+            cursorColor={theme.primary}
             focusedBackgroundColor={theme.backgroundPanel}
             onInput={(value) => {
               inputValue = value;
@@ -229,26 +245,30 @@ export function AnswerDialog(props: AnswerDialogProps) {
               if (input) input.value = "";
             }}
           />
-        </box>
-        <box
-          flexDirection="row"
-          justifyContent="space-between"
-          alignItems="center"
-          width={transcriptWidth + 2}
-          marginTop={1}
-        >
-          <box flexDirection="row" gap={1}>
-            <ActionButton
-              api={props.api}
-              label="Continue In Main Thread"
-              primary
-              disabled={!canContinue()}
-              onPress={props.onContinue}
-            />
-            <ActionButton api={props.api} label="Hide" onPress={props.onHide} />
-            <ActionButton api={props.api} label="Close" onPress={props.onClose} />
+          <box
+            flexDirection="row"
+            justifyContent="space-between"
+            alignItems="center"
+            width={transcriptWidth}
+          >
+            <box flexDirection="row" gap={2}>
+              <Show when={canContinue()}>
+                <ActionButton
+                  api={props.api}
+                  label="Continue"
+                  keybind="shift+enter"
+                  onPress={props.onContinue}
+                />
+              </Show>
+              <ActionButton
+                api={props.api}
+                label="Toggle"
+                keybind={props.hideKey}
+                onPress={props.onHide}
+              />
+            </box>
+            <text fg={theme.textMuted}>{props.modelName}</text>
           </box>
-          <text fg={theme.textMuted}>{props.modelName}</text>
         </box>
       </box>
     </box>
@@ -283,7 +303,10 @@ function buildMiniMessages(state: AnswerDialogState): MiniMessage[] {
 
   const lastText = [...lastAssistant.parts]
     .reverse()
-    .find((part): part is Extract<MiniPart, { type: "text" }> => part.type === "text");
+    .find(
+      (part): part is Extract<MiniPart, { type: "text" }> =>
+        part.type === "text",
+    );
 
   if (lastText) {
     const streamingTrimmed = state.streamingAnswer.trim();
@@ -330,7 +353,8 @@ function estimateMiniMessagesHeight(
     }
     lines += 1;
   }
-  if (state.error) lines += estimateWrappedLines(`Error: ${state.error}`, width);
+  if (state.error)
+    lines += estimateWrappedLines(`Error: ${state.error}`, width);
   if (state.loading && messages.length > 0) lines += 1;
   if (messages.length === 0) lines += 1;
   return lines;
@@ -383,7 +407,9 @@ function toMiniPart(part: Part): MiniPart | undefined {
   return undefined;
 }
 
-function summarizeToolInput(input: { [key: string]: unknown } | undefined): string {
+function summarizeToolInput(
+  input: { [key: string]: unknown } | undefined,
+): string {
   if (!input) return "";
   const entries = Object.entries(input).slice(0, 2);
   if (entries.length === 0) return "";
@@ -394,8 +420,6 @@ function summarizeToolInput(input: { [key: string]: unknown } | undefined): stri
     })
     .join(" ");
 }
-
-
 
 function formatMiniPart(part: MiniPart) {
   if (part.type === "reasoning") return `thinking: ${part.text}`;

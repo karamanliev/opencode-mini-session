@@ -67,7 +67,7 @@ export async function openMiniSession(
   }
 
   const { sessionID } = currentRoute.params as { sessionID: string };
-  const title = "mini";
+  const title = "mini session";
   void startQuestion(
     api,
     config,
@@ -605,9 +605,7 @@ function buildMiniSessionTranscript(state: AnswerDialogState) {
 }
 
 function buildContinuePrompt(transcript: string) {
-  return ["[Context from a mini session]", transcript, "---\n"].join(
-    "\n\n",
-  );
+  return ["[Context from a mini session]", transcript, "---\n"].join("\n\n");
 }
 
 function extractErrorMessage(error: unknown) {
