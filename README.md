@@ -1,6 +1,6 @@
-# opencode-mini-session
+# OpenCode mini session
 
-An OpenCode TUI plugin that opens an interactive mini session for side questions, with full session context and multi-turn conversation.
+An OpenCode TUI plugin that opens an interactive mini temporary session for side questions, with full session context and multi-turn conversation.
 
 ## What it does
 
