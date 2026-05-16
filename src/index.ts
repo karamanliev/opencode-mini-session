@@ -1,5 +1,5 @@
 import type { TuiPlugin, TuiPluginModule } from "@opencode-ai/plugin/tui";
-import { createSignal } from "solid-js";
+import { createEffect, createSignal } from "solid-js";
 import { createOverlaySlot } from "./components/AnswerDialog";
 import { parseConfig } from "./config";
 import {
@@ -37,10 +37,26 @@ const tui: TuiPlugin = async (api, options) => {
     undefined,
     { equals: false },
   );
+  const [originSessionID, setOriginSessionID] = createSignal<string | undefined>(undefined);
   let activeDialog: ActiveDialogController | undefined;
   let modelPickerOpen = false;
 
   api.lifecycle.onDispose(() => activeDialog?.close());
+
+  createEffect(() => {
+    const origin = originSessionID();
+    if (!origin) return;
+    const route = api.route.current;
+    if (route.name !== "session" || (route.params as { sessionID: string } | undefined)?.sessionID !== origin) {
+      setOriginSessionID(undefined);
+      api.ui.toast({
+        variant: "info",
+        message: "mini session closed.",
+        duration: 1000,
+      });
+      void activeDialog?.close();
+    }
+  });
 
   api.slots.register({
     slots: { app: createOverlaySlot(overlay) },
@@ -105,10 +121,12 @@ const tui: TuiPlugin = async (api, options) => {
           const currentRoute = api.route.current;
           if (currentRoute.name !== "session") return;
           const { sessionID } = currentRoute.params as { sessionID: string };
+          if (!activeDialog) setOriginSessionID(sessionID);
           void openMiniSession(api, config, setOverlay, {
             get: () => activeDialog,
             set: (dialog) => {
               activeDialog = dialog;
+              if (!dialog) setOriginSessionID(undefined);
             },
           }, {
             get: selectedModel,
