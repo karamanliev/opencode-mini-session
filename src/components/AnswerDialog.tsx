@@ -159,19 +159,19 @@ export function AnswerDialog(props: AnswerDialogProps) {
               {messages().length > 0 ? (
                 messages().map((message) => (
                   <box flexDirection="column" gap={0}>
-                  <text
-                    fg={
-                      message.role === "assistant"
-                        ? theme.primary
-                        : theme.textMuted
-                    }
-                  >
-                    <b>
-                      {message.role === "assistant"
-                        ? `assistant (${message.modelName ?? props.modelName})`
-                        : message.role}
-                    </b>
-                  </text>
+                    <text
+                      fg={
+                        message.role === "assistant"
+                          ? theme.primary
+                          : theme.secondary
+                      }
+                    >
+                      <b>
+                        {message.role === "assistant"
+                          ? `assistant [${message.modelName ?? props.modelName}]`
+                          : message.role}
+                      </b>
+                    </text>
                     {message.parts.map((part, index) => (
                       <box
                         marginTop={getMiniPartTopMargin(message.parts, index)}
@@ -294,7 +294,10 @@ function buildMiniMessages(state: AnswerDialogState): MiniMessage[] {
       parts: entry.parts
         .map(toMiniPart)
         .filter((part): part is MiniPart => Boolean(part)),
-      modelName: entry.info.role === "assistant" ? state.messageModels[entry.info.id] : undefined,
+      modelName:
+        entry.info.role === "assistant"
+          ? state.messageModels[entry.info.id]
+          : undefined,
     }))
     .filter((message) => message.parts.length > 0);
 
