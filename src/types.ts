@@ -6,6 +6,7 @@ export type MiniConfig = {
   model: string | null;
   tokenLimit: number;
   keybind: string | false;
+  freshKeybind: string | false;
   allowedTools: string[] | null;
 };
 
@@ -48,6 +49,7 @@ export type AnswerDialogState = {
   scrollbarVisible: boolean;
   error?: string;
   messageModels: Record<string, string>;
+  contextTokens: number;
 };
 
 export type AnswerDialogProps = {
@@ -55,6 +57,7 @@ export type AnswerDialogProps = {
   title: string;
   modelName: string;
   hideKey: string;
+  tokenLimit: number;
   state: AnswerDialogState;
   onScroller?: (scroller: ScrollBoxRenderable | undefined) => void;
   onInput?: (input: InputRenderable | undefined) => void;

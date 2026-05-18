@@ -1,4 +1,4 @@
-import { DEFAULT_ALLOWED_TOOLS, DEFAULT_FULL_TOKEN_LIMIT, DEFAULT_KEYBIND } from "./constants";
+import { DEFAULT_ALLOWED_TOOLS, DEFAULT_FRESH_KEYBIND, DEFAULT_FULL_TOKEN_LIMIT, DEFAULT_KEYBIND } from "./constants";
 import type { MiniConfig } from "./types";
 
 export function parseConfig(options: unknown): MiniConfig {
@@ -16,6 +16,7 @@ export function parseConfig(options: unknown): MiniConfig {
       DEFAULT_FULL_TOKEN_LIMIT,
     ),
     keybind: parseKeybind(input.keybind),
+    freshKeybind: parseKeybind(input.freshKeybind, DEFAULT_FRESH_KEYBIND),
     allowedTools: parseAllowedTools(input.allowedTools),
   };
 }
@@ -26,9 +27,9 @@ function parsePositiveNumber(value: unknown, fallback: number) {
     : fallback;
 }
 
-function parseKeybind(value: unknown): string | false {
+function parseKeybind(value: unknown, fallback = DEFAULT_KEYBIND): string | false {
   if (value === false || value === "none") return false;
-  return typeof value === "string" && value.trim() ? value.trim() : DEFAULT_KEYBIND;
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
 function parseAllowedTools(value: unknown): string[] | null {

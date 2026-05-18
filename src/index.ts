@@ -8,12 +8,14 @@ import {
   CMD_CONTINUE,
   CMD_HIDE,
   CMD_OPEN,
+  CMD_OPEN_FRESH,
   CMD_PAGE_DOWN,
   CMD_PAGE_UP,
   CMD_SCROLL_BOTTOM,
   CMD_SCROLL_DOWN,
   CMD_SCROLL_TOP,
   CMD_SCROLL_UP,
+  DEFAULT_FRESH_KEYBIND,
   DEFAULT_KEYBIND,
   PLUGIN_ID,
   SCROLL_LINE_DELTA,
@@ -29,6 +31,7 @@ import type {
 const tui: TuiPlugin = async (api, options) => {
   const config = parseConfig(options);
   const keybind = config.keybind || DEFAULT_KEYBIND;
+  const freshKeybind = config.freshKeybind || DEFAULT_FRESH_KEYBIND;
   const [overlay, setOverlay] = createSignal<OverlayState | undefined>(
     undefined,
     { equals: false },
@@ -139,6 +142,34 @@ const tui: TuiPlugin = async (api, options) => {
       },
       {
         namespace: "palette",
+        name: CMD_OPEN_FRESH,
+        title: "mini fresh",
+        desc: "Open a fresh mini session without main session context",
+        category: "Plugin",
+        slashName: "mini-fresh",
+        enabled: () => api.route.current.name === "session",
+        run() {
+          const currentRoute = api.route.current;
+          if (currentRoute.name !== "session") return;
+          const { sessionID } = currentRoute.params as { sessionID: string };
+          if (!activeDialog) setOriginSessionID(sessionID);
+          void openMiniSession(api, config, setOverlay, {
+            get: () => activeDialog,
+            set: (dialog) => {
+              activeDialog = dialog;
+              if (!dialog) setOriginSessionID(undefined);
+            },
+          }, {
+            get: selectedModel,
+            set: setSelectedModel,
+          }, (onAfterSelect) => openModelPicker(api, config, sessionID, { get: selectedModel, set: setSelectedModel }, () => {
+            modelPickerOpen = false;
+            onAfterSelect();
+          }), true);
+        },
+      },
+      {
+        namespace: "palette",
         name: CMD_CHANGE_MODEL,
         title: "mini model",
         desc: "Change the model for future mini-session questions",
@@ -156,7 +187,10 @@ const tui: TuiPlugin = async (api, options) => {
         },
       },
     ],
-    bindings: [{ key: keybind, cmd: CMD_OPEN, desc: "Open a mini session" }],
+    bindings: [
+      { key: keybind, cmd: CMD_OPEN, desc: "Open a mini session" },
+      { key: freshKeybind, cmd: CMD_OPEN_FRESH, desc: "Open a fresh mini session" },
+    ],
   });
 };
 

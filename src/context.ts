@@ -29,8 +29,8 @@ export function formatFullContext(entries: SessionEntry[], tokenLimit: number) {
     if (usedTokens >= tokenLimit) break;
   }
 
-  if (selected.length === 0) return "No conversation context available.";
-  return selected.reverse().join("\n\n");
+  if (selected.length === 0) return { context: "No conversation context available.", usedTokens: 0 };
+  return { context: selected.reverse().join("\n\n"), usedTokens };
 }
 
 function formatEntry(entry: SessionEntry) {
@@ -70,4 +70,14 @@ function truncate(value: string, maxLength: number) {
 
 export function estimateTokens(text: string) {
   return Math.ceil(text.length / 3.4);
+}
+
+export function sumMiniSessionTokens(entries: SessionEntry[]): number {
+  let sum = 0;
+  for (const entry of entries) {
+    if (entry.info.role === "assistant" && entry.info.tokens?.input) {
+      sum += entry.info.tokens.input;
+    }
+  }
+  return sum;
 }

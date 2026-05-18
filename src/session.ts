@@ -25,6 +25,17 @@ type ModelSelectValue =
       variant?: string;
     };
 
+function getMainSessionInputTokens(api: TuiPluginApi, sessionID: string): number {
+  const messages = api.state.session.messages(sessionID);
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role === "assistant" && msg.tokens?.input) {
+      return msg.tokens.input;
+    }
+  }
+  return 0;
+}
+
 const MINI_AGENT = "general";
 const ADDITIONAL_PERMISSION_IDS = [
   "edit",
@@ -49,6 +60,7 @@ export async function openMiniSession(
   active: ActiveDialog,
   modelPreference: ModelPreferenceState,
   openPickerFn: (onAfterSelect: () => void) => void,
+  fresh = false,
 ) {
   const currentRoute = api.route.current;
 
@@ -62,12 +74,16 @@ export async function openMiniSession(
 
   const activeDialog = active.get();
   if (activeDialog) {
-    activeDialog.show();
-    return;
+    if (fresh) {
+      void activeDialog.close();
+    } else {
+      activeDialog.show();
+      return;
+    }
   }
 
   const { sessionID } = currentRoute.params as { sessionID: string };
-  const title = "mini session";
+  const title = fresh ? "mini session (fresh)" : "mini session";
   void startQuestion(
     api,
     config,
@@ -77,6 +93,7 @@ export async function openMiniSession(
     active,
     modelPreference,
     openPickerFn,
+    fresh,
   );
 }
 
@@ -89,9 +106,11 @@ export async function startQuestion(
   active: ActiveDialog,
   modelPreference: ModelPreferenceState,
   openPickerFn: (onAfterSelect: () => void) => void,
+  fresh = false,
 ) {
-  const entries = getSessionEntries(api, sessionID);
-  const context = formatFullContext(entries, config.tokenLimit);
+  const entries = fresh ? [] : getSessionEntries(api, sessionID);
+  const context = fresh ? "" : formatFullContext(entries, config.tokenLimit).context;
+  const contextTokens = fresh ? 0 : Math.min(getMainSessionInputTokens(api, sessionID), config.tokenLimit);
   const toolIDs = await getAvailableToolIDs(api);
   const resolvedTools = resolveAllowedTools(config.allowedTools, toolIDs);
   const system = buildSystemPrompt(context, resolvedTools);
@@ -109,6 +128,7 @@ export async function startQuestion(
     loading: false,
     scrollbarVisible: false,
     messageModels: {},
+    contextTokens,
   };
 
   const submissionModelQueue: string[] = [];
@@ -263,6 +283,7 @@ export async function startQuestion(
       title,
       modelName: getModelName(),
       hideKey,
+      tokenLimit: config.tokenLimit,
       state: dialogState,
       onScroller: (scroller) => {
         overlayScroller = scroller;
@@ -577,14 +598,16 @@ export function extractAssistantText(
 
 function buildSystemPrompt(context: string, allowedTools: string[]) {
   const intro =
-    "You are answering a quick side question about an ongoing coding session. Below is the conversation context from the session. Answer concisely based on what you can see.";
+    "You are answering a quick side question about an ongoing coding session. Answer concisely.";
 
   const toolNote =
     allowedTools.length === 0
       ? " No tools are available in this session. Do not attempt to use any tools."
       : ` You may only use the following tools: ${allowedTools.join(", ")}. Do not attempt to use any other tools.`;
 
-  return `${intro}${toolNote}\n\n<session-context>\n${context}\n</session-context>`;
+  if (!context) return `${intro}${toolNote}`;
+
+  return `${intro} Below is the conversation context from the session.${toolNote}\n\n<session-context>\n${context}\n</session-context>`;
 }
 
 function resolveAllowedTools(
