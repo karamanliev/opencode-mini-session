@@ -20,7 +20,7 @@ Press `alt+b` (or run `/mini` from the command palette) during any OpenCode sess
 ### Trigger
 
 | Key | Action |
-|---|---|---|
+|---|---|
 | `alt+b` (configurable) | Toggle mini session (with main session context) |
 | `alt+n` (configurable) | Open a fresh mini session (no context) |
 | `/mini` | Open mini session (command palette) |
@@ -33,6 +33,7 @@ Press `alt+b` (or run `/mini` from the command palette) during any OpenCode sess
 |---|---|
 | `enter` | Send question / follow-up |
 | `alt+b` (configurable) | Hide overlay (resumable) |
+| `alt+n` (configurable) | Hide freshoverlay (resumable) |
 | `tab` | Change the model for the next question |
 | `esc` / `ctrl+c` | Cancel and close |
 
@@ -47,6 +48,7 @@ Add to your OpenCode TUI config (`~/.config/opencode/tui.json`):
       "model": "anthropic/claude-sonnet-4.6",
       "tokenLimit": 50000,
       "keybind": "alt+b",
+      "freshKeybind": "alt+n",
       "allowedTools": ["glob", "grep", "read", "list", "webfetch"]
     }]
   ]
