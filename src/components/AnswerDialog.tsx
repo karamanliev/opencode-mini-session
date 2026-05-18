@@ -8,6 +8,7 @@ import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { Part } from "@opencode-ai/sdk/v2";
 import { createMemo, Show } from "solid-js";
 import { THINKING_TEXT } from "../constants";
+import { sumMiniSessionTokens } from "../context";
 import type {
   AnswerDialogProps,
   AnswerDialogState,
@@ -102,6 +103,10 @@ export function AnswerDialog(props: AnswerDialogProps) {
       ),
   );
 
+  const totalTokens = createMemo(() =>
+    sumMiniSessionTokens(props.state.entries),
+  );
+
   return (
     <box
       position="absolute"
@@ -137,9 +142,14 @@ export function AnswerDialog(props: AnswerDialogProps) {
           alignItems="center"
           marginBottom={1}
         >
-          <text fg={theme.text}>
-            <b>{props.title}</b>
-          </text>
+          <box flexDirection="row" gap={2} alignItems="center">
+            <text fg={theme.text}>
+              <b>{props.title}</b>
+            </text>
+            <text fg={theme.textMuted}>
+              {totalTokens().toLocaleString()} / {props.tokenLimit.toLocaleString()} tokens
+            </text>
+          </box>
           <HintBar api={props.api} hideKey={props.hideKey} />
         </box>
         {/* transcript */}
@@ -464,6 +474,7 @@ export function createOverlaySlot(getOverlay: () => OverlayState | undefined) {
             title={current().title}
             modelName={current().modelName}
             hideKey={current().hideKey}
+            tokenLimit={current().tokenLimit}
             state={current().state}
             onScroller={current().onScroller}
             onInput={current().onInput}

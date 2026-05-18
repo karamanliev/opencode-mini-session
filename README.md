@@ -21,8 +21,10 @@ Press `alt+b` (or run `/mini` from the command palette) during any OpenCode sess
 
 | Key | Action |
 |---|---|
-| `alt+b` (configurable) | Toggle mini session overlay |
+| `alt+b` (configurable) | Toggle mini session (with main session context) |
+| `alt+n` (configurable) | Open a fresh mini session (no context) |
 | `/mini` | Open mini session (command palette) |
+| `/mini-fresh` | Open fresh mini session (command palette) |
 | `/mini-model` | Change model for future mini sessions |
 
 ### Inside the mini session
@@ -31,6 +33,7 @@ Press `alt+b` (or run `/mini` from the command palette) during any OpenCode sess
 |---|---|
 | `enter` | Send question / follow-up |
 | `alt+b` (configurable) | Hide overlay (resumable) |
+| `alt+n` (configurable) | Hide freshoverlay (resumable) |
 | `tab` | Change the model for the next question |
 | `esc` / `ctrl+c` | Cancel and close |
 
@@ -45,6 +48,7 @@ Add to your OpenCode TUI config (`~/.config/opencode/tui.json`):
       "model": "anthropic/claude-sonnet-4.6",
       "tokenLimit": 50000,
       "keybind": "alt+b",
+      "freshKeybind": "alt+n",
       "allowedTools": ["glob", "grep", "read", "list", "webfetch"]
     }]
   ]
@@ -61,9 +65,23 @@ All options are optional. Defaults are shown below.
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `model` | `string \| null` | `null` | Override model as `providerID/modelID` (e.g. `"anthropic/claude-sonnet-4-5"`). `null` auto-detects from current session. |
-| `tokenLimit` | `number` | `50000` | Maximum tokens of session context to include. |
-| `keybind` | `string \| false` | `"alt+b"` | Global keybind. Set to `false` or `"none"` to disable. |
+| `tokenLimit` | `number` | `50000` | Maximum tokens of session context to include (for `alt+b`). |
+| `keybind` | `string \| false` | `"alt+b"` | Global keybind for normal mini session. Set to `false` or `"none"` to disable. |
+| `freshKeybind` | `string \| false` | `"alt+n"` | Global keybind for fresh mini session (no context). Set to `false` or `"none"` to disable. |
 | `allowedTools` | `string[] \| null` | `null` | Tools the mini session agent can use. See [Tool access](#tool-access). |
+
+## Token counter
+
+The mini session header shows a live token counter (`used / limit`). The `used` value is the sum of real API-reported input tokens across all mini session turns, so you always know how much of your context window is consumed.
+
+### Normal vs fresh
+
+| Mode | Context included | When to use |
+|---|---|---|
+| **`alt+b`** (normal) | Main session history packed into system prompt (up to `tokenLimit`) | You need the AI to know what happened in your current session |
+| **`alt+n`** (fresh) | No main session context — just tool definitions and instructions | Quick questions that don't need session history; uses fewer tokens |
+
+The `tokenLimit` config only affects `alt+b` — it caps how much main session history gets injected.
 
 ## Tool access
 
