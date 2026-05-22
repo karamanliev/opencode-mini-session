@@ -156,6 +156,9 @@ export function AnswerDialog(props: AnswerDialogProps) {
             verticalScrollbarOptions={{ visible: showScrollbar() }}
           >
             <box flexDirection="column" gap={1} width={transcriptContentWidth}>
+              {props.state.notice ? (
+                <text fg={theme.warning}>Warning: {props.state.notice}</text>
+              ) : null}
               {messages().length > 0 ? (
                 messages().map((message) => (
                   <box flexDirection="column" gap={0}>
@@ -200,9 +203,6 @@ export function AnswerDialog(props: AnswerDialogProps) {
               ) : (
                 <text fg={theme.textMuted}>Ask a side question below.</text>
               )}
-              {props.state.notice ? (
-                <text fg={theme.warning}>Warning: {props.state.notice}</text>
-              ) : null}
               {props.state.error ? (
                 <text fg={theme.error}>Error: {props.state.error}</text>
               ) : null}
