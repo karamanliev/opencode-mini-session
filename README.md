@@ -40,7 +40,7 @@ Add to your OpenCode TUI config (`~/.config/opencode/tui.json`):
 
 ```json
 {
-  "plugins": [
+  "plugin": [
     ["opencode-mini-session", {
       "model": "anthropic/claude-sonnet-4.6",
       "tokenLimit": 50000,
