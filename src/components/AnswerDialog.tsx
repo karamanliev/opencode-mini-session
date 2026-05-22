@@ -200,6 +200,9 @@ export function AnswerDialog(props: AnswerDialogProps) {
               ) : (
                 <text fg={theme.textMuted}>Ask a side question below.</text>
               )}
+              {props.state.notice ? (
+                <text fg={theme.warning}>Warning: {props.state.notice}</text>
+              ) : null}
               {props.state.error ? (
                 <text fg={theme.error}>Error: {props.state.error}</text>
               ) : null}
@@ -371,6 +374,8 @@ function estimateMiniMessagesHeight(
   }
   if (state.error)
     lines += estimateWrappedLines(`Error: ${state.error}`, width);
+  if (state.notice)
+    lines += estimateWrappedLines(`Warning: ${state.notice}`, width);
   if (state.loading && messages.length > 0) lines += 1;
   if (messages.length === 0) lines += 1;
   return lines;

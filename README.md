@@ -42,7 +42,7 @@ Add to your OpenCode TUI config (`~/.config/opencode/tui.json`):
 {
   "plugin": [
     ["opencode-mini-session", {
-      "model": "anthropic/claude-sonnet-4.6",
+      "model": "some-provider/your-model",
       "tokenLimit": 50000,
       "keybind": "alt+b",
       "allowedTools": ["glob", "grep", "read", "list", "webfetch"]

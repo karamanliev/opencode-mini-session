@@ -46,6 +46,7 @@ export type AnswerDialogState = {
   streamingAnswer: string;
   loading: boolean;
   scrollbarVisible: boolean;
+  notice?: string;
   error?: string;
   messageModels: Record<string, string>;
 };
