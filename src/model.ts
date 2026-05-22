@@ -1,3 +1,4 @@
+import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { ResolvedModel, SessionEntry } from "./types";
 
 export type ModelSource = "config" | "session" | "unknown";
@@ -5,6 +6,7 @@ export type ModelSource = "config" | "session" | "unknown";
 export type ResolvedModelWithSource = {
   model: ResolvedModel;
   source: ModelSource;
+  notice?: string;
 };
 
 export function resolveModel(
@@ -56,6 +58,33 @@ export function parseModelOverride(value: string) {
   const modelID = rest.join("/");
   if (!providerID || !modelID) return undefined;
   return { providerID, modelID };
+}
+
+export function resolveDefaultModel(
+  providers: TuiPluginApi["state"]["provider"],
+  configuredModel: string | null,
+  entries: SessionEntry[],
+): ResolvedModelWithSource {
+  const resolved = resolveModel(configuredModel, entries);
+  if (resolved.source !== "config") return resolved;
+  if (isAvailableModel(providers, resolved.model)) return resolved;
+
+  return {
+    ...resolveModel(null, entries),
+    notice: `Configured mini model ${configuredModel} was not found. The main session model will be used.`,
+  };
+}
+
+function isAvailableModel(
+  providers: TuiPluginApi["state"]["provider"],
+  resolved: ResolvedModel,
+) {
+  const model = resolved.model;
+  if (!model) return false;
+  const available = providers.find((provider) => provider.id === model.providerID)
+    ?.models[model.modelID];
+  if (!available) return false;
+  return !resolved.variant || Boolean(available.variants?.[resolved.variant]);
 }
 
 export function formatResolvedModel(resolved: ResolvedModel) {

@@ -7,7 +7,7 @@ import type { PermissionRuleset } from "@opencode-ai/sdk/v2";
 import type { Setter } from "solid-js";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_KEYBIND } from "./constants";
 import { getSessionEntries, formatFullContext } from "./context";
-import { resolveModel, formatResolvedModel, type ModelSource } from "./model";
+import { resolveDefaultModel, formatResolvedModel, type ModelSource } from "./model";
 import type {
   ActiveDialog,
   AnswerDialogState,
@@ -97,7 +97,11 @@ export async function startQuestion(
   const system = buildSystemPrompt(context, resolvedTools);
   const permission = buildPermissionRules(toolIDs, resolvedTools);
   const tools = buildToolSelection(toolIDs, resolvedTools);
-  const defaultResolvedModel = resolveDefaultModel(api, config.model, entries);
+  const defaultResolvedModel = resolveDefaultModel(
+    api.state.provider,
+    config.model,
+    entries,
+  );
   const getResolvedModel = () =>
     modelPreference.get() ?? defaultResolvedModel.model;
   const getModelName = () => formatResolvedModel(getResolvedModel());
@@ -465,7 +469,7 @@ export function openModelPicker(
   onAfterSelect?: () => void,
 ) {
   const { model: defaultModel, source: defaultSource } = resolveDefaultModel(
-    api,
+    api.state.provider,
     config.model,
     getSessionEntries(api, sessionID),
   );
@@ -502,31 +506,6 @@ export function openModelPicker(
       },
     }),
   );
-}
-
-function resolveDefaultModel(
-  api: Pick<TuiPluginApi, "state">,
-  configuredModel: string | null,
-  entries: ReturnType<typeof getSessionEntries>,
-): ReturnType<typeof resolveModel> & { notice?: string } {
-  const resolved = resolveModel(configuredModel, entries);
-  if (resolved.source !== "config") return resolved;
-  if (isAvailableModel(api, resolved.model)) return resolved;
-
-  return {
-    ...resolveModel(null, entries),
-    notice: `Configured mini model ${configuredModel} was not found. The main session model will be used.`,
-  };
-}
-
-function isAvailableModel(api: Pick<TuiPluginApi, "state">, resolved: ResolvedModel) {
-  const model = resolved.model;
-  if (!model) return false;
-  const available = api.state.provider.find(
-    (provider) => provider.id === model.providerID,
-  )?.models[model.modelID];
-  if (!available) return false;
-  return !resolved.variant || Boolean(available.variants?.[resolved.variant]);
 }
 
 function buildModelOptions(
