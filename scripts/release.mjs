@@ -19,11 +19,6 @@ function run(command, args = []) {
   execFileSync(command, args, { stdio: "inherit" });
 }
 
-const status = read("git", ["status", "-s"]);
-if (status) {
-  throw new Error("Working tree must be clean before releasing.");
-}
-
 const branchLine = read("git", ["branch"])
   .split("\n")
   .find((line) => line.startsWith("* "));
@@ -33,10 +28,13 @@ if (!branch || branch.startsWith("(")) {
   throw new Error("Release from a named branch, not a detached HEAD.");
 }
 
-run("npm", ["version", versionArg]);
+run("npm", ["version", "--no-git-tag-version", versionArg]);
 
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 const tag = `v${pkg.version}`;
+
+run("git", ["commit", "-m", tag, "--", "package.json", "package-lock.json"]);
+run("git", ["tag", tag]);
 
 run("git", ["push", "origin", branch]);
 run("git", ["push", "origin", "tag", tag]);
