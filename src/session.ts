@@ -5,10 +5,15 @@ import type {
 } from "@opencode-ai/plugin/tui";
 import type { PermissionRuleset } from "@opencode-ai/sdk/v2";
 import type { Setter } from "solid-js";
+import { version } from "../package.json";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_KEYBIND } from "./constants";
 import { getSessionEntries, formatFullContext } from "./context";
-import { extractErrorMessage, getErrorMessage } from "./diagnostics";
-import { resolveDefaultModel, formatResolvedModel, type ModelSource } from "./model";
+import { getErrorMessage } from "./diagnostics";
+import {
+  resolveDefaultModel,
+  formatResolvedModel,
+  type ModelSource,
+} from "./model";
 import type {
   ActiveDialog,
   AnswerDialogState,
@@ -73,11 +78,9 @@ export async function openMiniSession(
   }
 
   const { sessionID } = currentRoute.params as { sessionID: string };
-  const title = "mini session";
   void startQuestion(
     api,
     config,
-    title,
     sessionID,
     setOverlay,
     active,
@@ -89,7 +92,6 @@ export async function openMiniSession(
 export async function startQuestion(
   api: TuiPluginApi,
   config: MiniConfig,
-  title: string,
   sessionID: string,
   setOverlay: Setter<OverlayState | undefined>,
   active: ActiveDialog,
@@ -273,7 +275,8 @@ export async function startQuestion(
     if (hidden) return;
     setOverlay({
       api,
-      title,
+      title: "mini session",
+      version,
       modelName: getModelName(),
       hideKey,
       state: dialogState,
@@ -535,10 +538,9 @@ function buildModelOptions(
   );
 
   const defaultModelName = defaultModel.model
-    ? providers
-        .find((p) => p.id === defaultModel.model!.providerID)
-        ?.models[defaultModel.model!.modelID]?.name ||
-      defaultModel.model!.modelID
+    ? providers.find((p) => p.id === defaultModel.model!.providerID)?.models[
+        defaultModel.model!.modelID
+      ]?.name || defaultModel.model!.modelID
     : "default";
 
   const sourceLabel: Record<ModelSource, string> = {
@@ -549,7 +551,9 @@ function buildModelOptions(
 
   const options: TuiDialogSelectOption<ModelSelectValue>[] = [
     {
-      title: defaultModelName + (defaultModel.variant ? ` (${defaultModel.variant})` : ""),
+      title:
+        defaultModelName +
+        (defaultModel.variant ? ` (${defaultModel.variant})` : ""),
       value: { type: "default" },
       description: `${formatResolvedModel(defaultModel)}`,
       category: `Default [${sourceLabel[defaultSource]}]`,

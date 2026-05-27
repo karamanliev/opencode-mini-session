@@ -1,6 +1,6 @@
 {
   "name": "opencode-mini-session",
-  "version": "0.1.2",
+  "version": "0.3.3",
   "type": "module",
   "exports": {
     "./tui": "./src/index.ts"
@@ -13,6 +13,7 @@
     "url": "https://github.com/karamanliev/opencode-mini-session"
   },
   "scripts": {
+    "release": "node scripts/release.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -55,6 +55,7 @@ export type AnswerDialogState = {
 export type AnswerDialogProps = {
   api: TuiPluginApi;
   title: string;
+  version?: string;
   modelName: string;
   hideKey: string;
   state: AnswerDialogState;

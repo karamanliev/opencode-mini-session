@@ -140,9 +140,14 @@ export function AnswerDialog(props: AnswerDialogProps) {
           alignItems="center"
           marginBottom={1}
         >
-          <text fg={theme.text}>
-            <b>{props.title}</b>
-          </text>
+          <box flexDirection="row" gap={1}>
+            <text fg={theme.text}>
+              <b>{props.title}</b>
+            </text>
+            <Show when={props.version}>
+              {(version) => <text fg={theme.textMuted}>{version()}</text>}
+            </Show>
+          </box>
           <HintBar api={props.api} hideKey={props.hideKey} />
         </box>
         {/* transcript */}
@@ -487,6 +492,7 @@ export function createOverlaySlot(getOverlay: () => OverlayState | undefined) {
           <AnswerDialog
             api={current().api}
             title={current().title}
+            version={current().version}
             modelName={current().modelName}
             hideKey={current().hideKey}
             state={current().state}
