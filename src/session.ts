@@ -391,6 +391,7 @@ export async function startQuestion(
   try {
     const created = await api.client.session.create(
       {
+        parentID: sessionID,
         title: "mini session",
         directory: api.state.path.directory,
         agent: MINI_AGENT,
