@@ -55,11 +55,15 @@ function readDataMessage(error: Record<string, unknown>) {
   return normalizeErrorText(data.message);
 }
 
+const MAX_ERROR_TEXT_LENGTH = 4000;
+
 function normalizeErrorText(value: unknown) {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
-  return trimmed.length > 600 ? `${trimmed.slice(0, 597)}...` : trimmed;
+  return trimmed.length > MAX_ERROR_TEXT_LENGTH
+    ? `${trimmed.slice(0, MAX_ERROR_TEXT_LENGTH - 3)}...`
+    : trimmed;
 }
 
 function isGenericErrorLabel(value: string) {
