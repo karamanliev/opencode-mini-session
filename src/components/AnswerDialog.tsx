@@ -479,9 +479,18 @@ function getMiniPartColor(
 
 function getCreateUserMessageHint(state: AnswerDialogState) {
   const text = [state.error, state.errorDetail].filter(Boolean).join("\n");
-  if (!/SessionPrompt\.createUserMessage|createUserMessage|chat\.message/i.test(text))
+  if (
+    !/SessionPrompt\.createUserMessage|createUserMessage|chat\.message|Plugin\.trigger/i.test(
+      text,
+    ) &&
+    !/UnknownError:\s*UnknownError/i.test(text)
+  )
     return undefined;
-  return "Hint: OpenCode failed while creating the user message. A server plugin chat.message hook may be throwing.";
+  return [
+    "Hint: OpenCode failed while building the user message. On Windows this is usually triggered by the subagent.",
+    'Try: set `"agent": "none"` in this plugin\'s options (in tui.jsonc) so the mini session uses opencode\'s default agent instead of `general`.',
+    "If that doesn't help, also try `opencode --pure` to rule out external plugin `chat.message` hooks.",
+  ].join("\n");
 }
 
 export function createOverlaySlot(getOverlay: () => OverlayState | undefined) {

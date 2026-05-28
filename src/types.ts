@@ -7,6 +7,8 @@ export type MiniConfig = {
   tokenLimit: number;
   keybind: string | false;
   allowedTools: string[] | null;
+  agent: string | false | undefined;
+  sendToolsMap: boolean;
 };
 
 export type SessionEntry = {

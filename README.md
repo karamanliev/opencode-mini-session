@@ -64,6 +64,8 @@ All options are optional. Defaults are shown below.
 | `tokenLimit` | `number` | `50000` | Maximum tokens of session context to include. |
 | `keybind` | `string \| false` | `"alt+b"` | Global keybind. Set to `false` or `"none"` to disable. |
 | `allowedTools` | `string[] \| null` | `null` | Tools the mini session agent can use. See [Tool access](#tool-access). |
+| `agent` | `string \| false \| null` | `"general"` | Agent to use for mini sessions. Omit or leave blank to use `"general"`. Set to `false`, `null`, or `"none"` to omit the agent field and let opencode choose its configured default agent. Useful workaround on Windows if `"general"` produces an `UnknownError`. |
+| `sendToolsMap` | `boolean` | `false` | Also send the deprecated per-message `tools` map. Leave `false` for current opencode builds; `allowedTools` still controls tool availability through the session permission rules. |
 
 ## Tool access
 
@@ -85,3 +87,24 @@ The mini session receives the main session's conversation as plain text:
 - Tool calls summarized inline (name + up to 4 input params, e.g. `[tool: read path=src/foo.ts]`)
 
 Oldest messages are dropped to fit the `tokenLimit`, and the result is injected into the system prompt inside `<session-context>` tags.
+
+## Troubleshooting
+
+### `UnknownError: UnknownError` on Windows
+
+If submitting a prompt in the mini session fails with `UnknownError: UnknownError` and the diagnostic dialog points at `SessionPrompt.createUserMessage`, the upstream opencode subagent path is failing on Windows. Set `"agent": "none"` in this plugin's options:
+
+```jsonc
+{
+  "plugin": [
+    [
+      "opencode-mini-session",
+      {
+        "agent": "none"
+      }
+    ]
+  ]
+}
+```
+
+This omits the `agent` field on session creation so opencode falls back to its configured default agent. The mini session still uses the same model, tools, and context as before.
