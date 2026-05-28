@@ -36,7 +36,7 @@ type ErrorPath =
   | "session.error event"
   | "session.create throw";
 
-const MINI_AGENT = "general";
+const DEFAULT_MINI_AGENT = "general";
 const ADDITIONAL_PERMISSION_IDS = [
   "edit",
   "bash",
@@ -104,7 +104,13 @@ export async function startQuestion(
   const resolvedTools = resolveAllowedTools(config.allowedTools, toolIDs);
   const system = buildSystemPrompt(context, resolvedTools);
   const permission = buildPermissionRules(toolIDs, resolvedTools);
-  const tools = buildToolSelection(toolIDs, resolvedTools);
+  const tools = config.sendToolsMap
+    ? buildToolSelection(toolIDs, resolvedTools)
+    : undefined;
+  const miniAgent: string | undefined =
+    config.agent === false
+      ? undefined
+      : config.agent ?? DEFAULT_MINI_AGENT;
   const defaultResolvedModel = resolveDefaultModel(
     api.state.provider,
     config.model,
@@ -305,8 +311,11 @@ export async function startQuestion(
     dialogState.errorDetail = buildErrorDetail({
       path,
       sessionID: tempSessionID,
+      agent: miniAgent ?? "(default)",
       resolvedModel: getResolvedModel(),
-      toolCount: Object.values(tools).filter(Boolean).length,
+      toolCount: tools
+        ? Object.values(tools).filter(Boolean).length
+        : resolvedTools.length,
     });
     dialogState.loading = false;
   };
@@ -368,7 +377,7 @@ export async function startQuestion(
           {
             sessionID: tempSessionID,
             system,
-            agent: MINI_AGENT,
+            ...(miniAgent ? { agent: miniAgent } : {}),
             tools,
             parts: [{ type: "text", text: prompt }],
             ...(resolvedModel.model ? { model: resolvedModel.model } : {}),
@@ -394,7 +403,7 @@ export async function startQuestion(
         parentID: sessionID,
         title: "mini session",
         directory: api.state.path.directory,
-        agent: MINI_AGENT,
+        ...(miniAgent ? { agent: miniAgent } : {}),
         permission,
       },
       { throwOnError: true },
@@ -689,13 +698,14 @@ function buildContinuePrompt(transcript: string) {
 function buildErrorDetail(options: {
   path: ErrorPath;
   sessionID?: string;
+  agent: string;
   resolvedModel: ResolvedModel;
   toolCount: number;
 }) {
   return [
     `Diagnostics: path=${options.path}`,
     `session=${options.sessionID ?? "pending"}`,
-    `agent=${MINI_AGENT}`,
+    `agent=${options.agent}`,
     `model=${formatResolvedModel(options.resolvedModel)}`,
     `tools=${options.toolCount}`,
   ].join(", ");

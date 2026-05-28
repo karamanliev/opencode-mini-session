@@ -17,6 +17,8 @@ export function parseConfig(options: unknown): MiniConfig {
     ),
     keybind: parseKeybind(input.keybind),
     allowedTools: parseAllowedTools(input.allowedTools),
+    agent: parseAgent(input.agent),
+    sendToolsMap: input.sendToolsMap === true,
   };
 }
 
@@ -34,4 +36,14 @@ function parseKeybind(value: unknown): string | false {
 function parseAllowedTools(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
   return value.every((item) => typeof item === "string") ? value : null;
+}
+
+function parseAgent(value: unknown): string | false | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === false) return false;
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.toLowerCase() === "none") return false;
+  return trimmed;
 }
