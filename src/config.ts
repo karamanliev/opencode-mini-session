@@ -1,4 +1,4 @@
-import { DEFAULT_ALLOWED_TOOLS, DEFAULT_FULL_TOKEN_LIMIT, DEFAULT_KEYBIND } from "./constants";
+import { DEFAULT_FULL_TOKEN_LIMIT, DEFAULT_KEYBIND } from "./constants";
 import type { MiniConfig } from "./types";
 
 export function parseConfig(options: unknown): MiniConfig {
@@ -11,12 +11,14 @@ export function parseConfig(options: unknown): MiniConfig {
       typeof input.model === "string" && input.model.trim()
         ? input.model.trim()
         : null,
+    agent: parseAgent(input.agent),
     tokenLimit: parsePositiveNumber(
       input.tokenLimit,
       DEFAULT_FULL_TOKEN_LIMIT,
     ),
     keybind: parseKeybind(input.keybind),
     allowedTools: parseAllowedTools(input.allowedTools),
+    allowedToolsProvided: Object.hasOwn(input, "allowedTools"),
   };
 }
 
@@ -29,6 +31,10 @@ function parsePositiveNumber(value: unknown, fallback: number) {
 function parseKeybind(value: unknown): string | false {
   if (value === false || value === "none") return false;
   return typeof value === "string" && value.trim() ? value.trim() : DEFAULT_KEYBIND;
+}
+
+function parseAgent(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function parseAllowedTools(value: unknown): string[] | null {
