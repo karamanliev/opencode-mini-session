@@ -3,10 +3,17 @@ import type {
   TuiDialogSelectOption,
   TuiPluginApi,
 } from "@opencode-ai/plugin/tui";
-import type { PermissionRuleset } from "@opencode-ai/sdk/v2";
 import type { Setter } from "solid-js";
 import { version } from "../package.json";
-import { DEFAULT_ALLOWED_TOOLS, DEFAULT_KEYBIND } from "./constants";
+import {
+  buildMiniErrorDetail,
+  buildMiniPromptPayload,
+  buildMiniSessionCreatePayload,
+  buildMiniSystemPrompt,
+  formatMiniNotice,
+  resolveRuntimeMiniAgent,
+} from "./agent";
+import { DEFAULT_KEYBIND } from "./constants";
 import { getSessionEntries, formatFullContext } from "./context";
 import { getErrorMessage } from "./diagnostics";
 import {
@@ -36,22 +43,6 @@ type ErrorPath =
   | "session.error event"
   | "session.create throw";
 
-const MINI_AGENT = "general";
-const ADDITIONAL_PERMISSION_IDS = [
-  "edit",
-  "bash",
-  "task",
-  "external_directory",
-  "todowrite",
-  "question",
-  "websearch",
-  "codesearch",
-  "repo_clone",
-  "repo_overview",
-  "lsp",
-  "doom_loop",
-  "skill",
-];
 
 export async function openMiniSession(
   api: TuiPluginApi,
@@ -100,11 +91,8 @@ export async function startQuestion(
 ) {
   const entries = getSessionEntries(api, sessionID);
   const context = formatFullContext(entries, config.tokenLimit);
-  const toolIDs = await getAvailableToolIDs(api);
-  const resolvedTools = resolveAllowedTools(config.allowedTools, toolIDs);
-  const system = buildSystemPrompt(context, resolvedTools);
-  const permission = buildPermissionRules(toolIDs, resolvedTools);
-  const tools = buildToolSelection(toolIDs, resolvedTools);
+  const resolvedAgent = await resolveRuntimeMiniAgent(api, config);
+  const system = buildMiniSystemPrompt(context, resolvedAgent);
   const defaultResolvedModel = resolveDefaultModel(
     api.state.provider,
     config.model,
@@ -121,7 +109,10 @@ export async function startQuestion(
     streamingAnswer: "",
     loading: false,
     scrollbarVisible: false,
-    notice: defaultResolvedModel.notice,
+    notice: formatMiniNotice(
+      defaultResolvedModel.notice,
+      ...resolvedAgent.notices,
+    ),
     errorDetail: undefined,
     messageModels: {},
   };
@@ -302,11 +293,11 @@ export async function startQuestion(
 
   const setPromptError = (path: ErrorPath, cause: unknown) => {
     dialogState.error = getErrorMessage(cause);
-    dialogState.errorDetail = buildErrorDetail({
+    dialogState.errorDetail = buildMiniErrorDetail({
       path,
       sessionID: tempSessionID,
       resolvedModel: getResolvedModel(),
-      toolCount: Object.values(tools).filter(Boolean).length,
+      resolvedAgent,
     });
     dialogState.loading = false;
   };
@@ -352,6 +343,7 @@ export async function startQuestion(
       });
       return false;
     }
+    const promptSessionID = tempSessionID;
 
     dialogState.error = undefined;
     dialogState.errorDetail = undefined;
@@ -365,17 +357,12 @@ export async function startQuestion(
       try {
         const resolvedModel = getResolvedModel();
         await api.client.session.promptAsync(
-          {
-            sessionID: tempSessionID,
+          buildMiniPromptPayload(resolvedAgent, {
+            sessionID: promptSessionID,
             system,
-            agent: MINI_AGENT,
-            tools,
-            parts: [{ type: "text", text: prompt }],
-            ...(resolvedModel.model ? { model: resolvedModel.model } : {}),
-            ...(resolvedModel.variant
-              ? { variant: resolvedModel.variant }
-              : {}),
-          },
+            prompt,
+            resolvedModel,
+          }),
           { throwOnError: true },
         );
       } catch (cause) {
@@ -390,13 +377,11 @@ export async function startQuestion(
 
   try {
     const created = await api.client.session.create(
-      {
+      buildMiniSessionCreatePayload(resolvedAgent, {
         parentID: sessionID,
         title: "mini session",
         directory: api.state.path.directory,
-        agent: MINI_AGENT,
-        permission,
-      },
+      }),
       { throwOnError: true },
     );
     tempSessionID = created.data.id;
@@ -604,64 +589,6 @@ export function extractAssistantText(
   return chunks.join("\n\n").trim();
 }
 
-function buildSystemPrompt(context: string, allowedTools: string[]) {
-  const intro =
-    "You are answering a quick side question about an ongoing coding session. Below is the conversation context from the session. Answer concisely based on what you can see.";
-
-  const toolNote =
-    allowedTools.length === 0
-      ? " No tools are available in this session. Do not attempt to use any tools."
-      : ` You may only use the following tools: ${allowedTools.join(", ")}. Do not attempt to use any other tools.`;
-
-  return `${intro}${toolNote}\n\n<session-context>\n${context}\n</session-context>`;
-}
-
-function resolveAllowedTools(
-  allowedTools: string[] | null,
-  availableToolIDs: string[],
-): string[] {
-  if (allowedTools === null) return DEFAULT_ALLOWED_TOOLS;
-  if (allowedTools.includes("*")) return [...availableToolIDs];
-  return allowedTools;
-}
-
-async function getAvailableToolIDs(api: TuiPluginApi): Promise<string[]> {
-  try {
-    const result = await api.client.tool.ids(
-      { directory: api.state.path.directory },
-      { throwOnError: true },
-    );
-    if (
-      Array.isArray(result.data) &&
-      result.data.every((item) => typeof item === "string")
-    ) {
-      return result.data;
-    }
-  } catch {}
-
-  return DEFAULT_ALLOWED_TOOLS;
-}
-
-function buildToolSelection(toolIDs: string[], allowedTools: string[]) {
-  return Object.fromEntries(
-    toolIDs.map((toolID) => [toolID, allowedTools.includes(toolID)]),
-  );
-}
-
-function buildPermissionRules(
-  toolIDs: string[],
-  allowedTools: string[],
-): PermissionRuleset {
-  const permissionIDs = [
-    ...new Set([...toolIDs, ...ADDITIONAL_PERMISSION_IDS]),
-  ];
-  return permissionIDs.map((permission) => ({
-    permission,
-    pattern: "*",
-    action: allowedTools.includes(permission) ? "allow" : "deny",
-  }));
-}
-
 function buildMiniSessionTranscript(state: AnswerDialogState) {
   const lines: string[] = [];
 
@@ -684,19 +611,4 @@ function buildMiniSessionTranscript(state: AnswerDialogState) {
 
 function buildContinuePrompt(transcript: string) {
   return ["[Context from a mini session]", transcript, "---\n"].join("\n\n");
-}
-
-function buildErrorDetail(options: {
-  path: ErrorPath;
-  sessionID?: string;
-  resolvedModel: ResolvedModel;
-  toolCount: number;
-}) {
-  return [
-    `Diagnostics: path=${options.path}`,
-    `session=${options.sessionID ?? "pending"}`,
-    `agent=${MINI_AGENT}`,
-    `model=${formatResolvedModel(options.resolvedModel)}`,
-    `tools=${options.toolCount}`,
-  ].join(", ");
 }

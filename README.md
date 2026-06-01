@@ -30,6 +30,7 @@ Press `alt+b` (or run `/mini` from the command palette) during any OpenCode sess
 | Key | Action |
 |---|---|
 | `enter` | Send question / follow-up |
+| `shift+enter` | Inject mini transcript into the main thread |
 | `alt+b` (configurable) | Hide overlay (resumable) |
 | `tab` | Change the model for the next question |
 | `esc` / `ctrl+c` | Cancel and close |
@@ -45,7 +46,7 @@ Add to your OpenCode TUI config (`~/.config/opencode/tui.json`):
       "model": "some-provider/your-model",
       "tokenLimit": 50000,
       "keybind": "alt+b",
-      "allowedTools": ["glob", "grep", "read", "list", "webfetch"]
+      "agent": null
     }]
   ]
 }
@@ -60,21 +61,31 @@ All options are optional. Defaults are shown below.
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `model` | `string \| null` | `null` | Override model as `providerID/modelID` (e.g. `"anthropic/claude-sonnet-4-5"`). `null` auto-detects from current session. |
+| `model` | `string \| null` | `null` | Override model as `providerID/modelID`, for example `"anthropic/claude-sonnet-4.6"`. `null` auto-detects from the current session. |
+| `agent` | `string \| null` | `null` | `null` or omitted uses plugin-managed mini mode. A string uses an existing OpenCode agent by name. |
 | `tokenLimit` | `number` | `50000` | Maximum tokens of session context to include. |
 | `keybind` | `string \| false` | `"alt+b"` | Global keybind. Set to `false` or `"none"` to disable. |
-| `allowedTools` | `string[] \| null` | `null` | Tools the mini session agent can use. See [Tool access](#tool-access). |
+| ~`allowedTools`~ | `string[] \| null` | `null` | Deprecated. Use custom OpenCode agents for custom permissions. |
 
-## Tool access
+## Agents and permissions
 
-By default the mini session has access to read-only tools: `glob`, `grep`, `list`, `read`, `webfetch`. Use the `allowedTools` config option to change this:
+If `agent` is not set or is invalid, mini uses a plugin managed custom mini agent with read only tools: `glob`, `grep`, `list`, `read`, and `webfetch`.
 
-- `null` or omitted: use the default tools listed above
-- `[]`: disable all tools
-- `["bash", "edit", "read"]`: only the listed tools
-- `["*"]`: enable all available tools
+To customize permissions, tone, instructions, or other behavior, set `agent` to an existing OpenCode agent name. The plugin will use that agent's settings directly.
 
-To see available tool names, run `opencode debug agent general` and check the `tools` object in the output.
+See the [OpenCode agent docs](https://opencode.ai/docs/agents/) for more info on custom agent setup.
+
+For example, configure mini to use a custom `pirate` agent:
+
+```json
+{
+  "plugin": [
+    ["opencode-mini-session", { "agent": "pirate" }]
+  ]
+}
+```
+
+![Mini session using a custom pirate agent](.github/pirate.png)
 
 ## Session context
 

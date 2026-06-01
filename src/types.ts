@@ -4,9 +4,11 @@ import type { Message, Part } from "@opencode-ai/sdk/v2";
 
 export type MiniConfig = {
   model: string | null;
+  agent: string | null;
   tokenLimit: number;
   keybind: string | false;
   allowedTools: string[] | null;
+  allowedToolsProvided: boolean;
 };
 
 export type SessionEntry = {

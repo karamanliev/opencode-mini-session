@@ -14,6 +14,7 @@
   },
   "scripts": {
     "release": "node scripts/release.mjs",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -25,6 +26,7 @@
     "solid-js": "^1.9.12"
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.7"
   }
 }

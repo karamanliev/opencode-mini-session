@@ -28,6 +28,9 @@ if (!branch || branch.startsWith("(")) {
   throw new Error("Release from a named branch, not a detached HEAD.");
 }
 
+run("npm", ["run", "test"]);
+run("npm", ["run", "typecheck"]);
+
 run("npm", ["version", "--no-git-tag-version", versionArg]);
 
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
