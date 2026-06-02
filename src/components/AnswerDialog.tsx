@@ -167,6 +167,9 @@ export function AnswerDialog(props: AnswerDialogProps) {
               {props.state.notice ? (
                 <text fg={theme.warning}>Warning: {props.state.notice}</text>
               ) : null}
+              {props.state.update ? (
+                <text fg={theme.warning}>{props.state.update}</text>
+              ) : null}
               {messages().length > 0 ? (
                 messages().map((message) => (
                   <box flexDirection="column" gap={0}>

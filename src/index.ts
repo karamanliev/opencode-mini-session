@@ -1,5 +1,5 @@
 import type { TuiPlugin, TuiPluginModule } from "@opencode-ai/plugin/tui";
-import { createEffect, createSignal } from "solid-js";
+import { createEffect, createSignal, untrack } from "solid-js";
 import { createOverlaySlot } from "./components/AnswerDialog";
 import { parseConfig } from "./config";
 import {
@@ -25,8 +25,9 @@ import type {
   ModelPreference,
   OverlayState,
 } from "./types";
+import { startAutoUpdate } from "./update";
 
-const tui: TuiPlugin = async (api, options) => {
+const tui: TuiPlugin = async (api, options, meta) => {
   const config = parseConfig(options);
   const keybind = config.keybind || DEFAULT_KEYBIND;
   const [overlay, setOverlay] = createSignal<OverlayState | undefined>(
@@ -38,10 +39,19 @@ const tui: TuiPlugin = async (api, options) => {
     { equals: false },
   );
   const [originSessionID, setOriginSessionID] = createSignal<string | undefined>(undefined);
+  const [updateWarning, setUpdateWarning] = createSignal<string | undefined>(undefined);
   let activeDialog: ActiveDialogController | undefined;
   let modelPickerOpen = false;
 
   api.lifecycle.onDispose(() => activeDialog?.close());
+  startAutoUpdate(api, meta, setUpdateWarning);
+
+  createEffect(() => {
+    const warning = updateWarning();
+    const current = untrack(overlay);
+    if (!current || current.state.update === warning) return;
+    setOverlay({ ...current, state: { ...current.state, update: warning } });
+  });
 
   createEffect(() => {
     const origin = originSessionID();
@@ -134,7 +144,7 @@ const tui: TuiPlugin = async (api, options) => {
           }, (onAfterSelect) => openModelPicker(api, config, sessionID, { get: selectedModel, set: setSelectedModel }, () => {
               modelPickerOpen = false;
               onAfterSelect();
-            }));
+            }), updateWarning);
         },
       },
       {
