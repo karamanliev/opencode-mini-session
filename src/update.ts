@@ -56,7 +56,8 @@ export function handleAutoUpdateResult(
     setUpdateWarning(warning);
     api.ui.toast({
       variant: "info",
-      message: `${result.name} updated to ${result.latest}. Restart opencode to finish.`,
+      message: `New ${result.name} ${result.latest} version available. Restart opencode to apply the update.`,
+      duration: 8000
     });
     return;
   }
@@ -65,6 +66,7 @@ export function handleAutoUpdateResult(
     api.ui.toast({
       variant: "warning",
       message: `Could not update ${result.name}. Clear the opencode plugin cache and restart.`,
+      duration: 8000
     });
   }
 }
