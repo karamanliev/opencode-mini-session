@@ -51,6 +51,7 @@ export async function openMiniSession(
   active: ActiveDialog,
   modelPreference: ModelPreferenceState,
   openPickerFn: (onAfterSelect: () => void) => void,
+  getUpdateWarning?: () => string | undefined,
 ) {
   const currentRoute = api.route.current;
 
@@ -77,6 +78,7 @@ export async function openMiniSession(
     active,
     modelPreference,
     openPickerFn,
+    getUpdateWarning,
   );
 }
 
@@ -88,6 +90,7 @@ export async function startQuestion(
   active: ActiveDialog,
   modelPreference: ModelPreferenceState,
   openPickerFn: (onAfterSelect: () => void) => void,
+  getUpdateWarning?: () => string | undefined,
 ) {
   const entries = getSessionEntries(api, sessionID);
   const context = formatFullContext(entries, config.tokenLimit);
@@ -109,6 +112,7 @@ export async function startQuestion(
     streamingAnswer: "",
     loading: false,
     scrollbarVisible: false,
+    update: getUpdateWarning?.(),
     notice: formatMiniNotice(
       defaultResolvedModel.notice,
       ...resolvedAgent.notices,
