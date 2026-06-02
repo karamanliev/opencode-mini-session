@@ -106,3 +106,25 @@ The mini session receives the main session's conversation as plain text:
 - Tool calls summarized inline (name + up to 4 input params, e.g. `[tool: read path=src/foo.ts]`)
 
 Oldest messages are dropped to fit the `tokenLimit`, and the result is injected into the system prompt inside `<session-context>` tags.
+
+## Troubleshooting
+
+### Force update from older versions
+
+Older versions may stay cached by OpenCode. To force a fresh install, close OpenCode, remove the cached npm plugin package, then start OpenCode again.
+
+Linux and macOS:
+
+```sh
+rm -rf ~/.cache/opencode/node_modules/opencode-mini-session
+opencode
+```
+
+Windows PowerShell:
+
+```powershell
+Remove-Item -Recurse -Force "$HOME\.cache\opencode\node_modules\opencode-mini-session"
+opencode
+```
+
+For more information, see the official OpenCode docs for [npm plugins and plugin cache](https://opencode.ai/docs/plugins/#how-plugins-are-installed) and [configuration locations](https://opencode.ai/docs/config/#locations).
