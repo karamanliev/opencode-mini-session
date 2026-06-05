@@ -1,4 +1,8 @@
-import { DEFAULT_FULL_TOKEN_LIMIT, DEFAULT_KEYBIND } from "./constants";
+import {
+  DEFAULT_FULL_TOKEN_LIMIT,
+  DEFAULT_KEYBIND,
+  DEFAULT_TOGGLE_THINKING_KEYBIND,
+} from "./constants";
 import type { MiniConfig } from "./types";
 
 export function parseConfig(options: unknown): MiniConfig {
@@ -16,7 +20,13 @@ export function parseConfig(options: unknown): MiniConfig {
       input.tokenLimit,
       DEFAULT_FULL_TOKEN_LIMIT,
     ),
-    keybind: parseKeybind(input.keybind),
+    keybind: parseKeybind(input.keybind, DEFAULT_KEYBIND),
+    enableThinking:
+      typeof input.enableThinking === "boolean" ? input.enableThinking : false,
+    toggleThinkingKeybind: parseKeybind(
+      input.toggleThinkingKeybind,
+      DEFAULT_TOGGLE_THINKING_KEYBIND,
+    ),
     allowedTools: parseAllowedTools(input.allowedTools),
     allowedToolsProvided: Object.hasOwn(input, "allowedTools"),
   };
@@ -28,9 +38,12 @@ function parsePositiveNumber(value: unknown, fallback: number) {
     : fallback;
 }
 
-function parseKeybind(value: unknown): string | false {
-  if (value === false || value === "none") return false;
-  return typeof value === "string" && value.trim() ? value.trim() : DEFAULT_KEYBIND;
+function parseKeybind(value: unknown, fallback: string): string | false {
+  if (value === false) return false;
+  if (typeof value !== "string") return fallback;
+  const keybind = value.trim();
+  if (!keybind) return fallback;
+  return keybind === "none" ? false : keybind;
 }
 
 function parseAgent(value: unknown): string | null {

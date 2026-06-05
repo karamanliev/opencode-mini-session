@@ -13,7 +13,6 @@ import {
   formatMiniNotice,
   resolveRuntimeMiniAgent,
 } from "./agent";
-import { DEFAULT_KEYBIND } from "./constants";
 import { getSessionEntries, formatFullContext } from "./context";
 import { getErrorMessage } from "./diagnostics";
 import {
@@ -104,7 +103,7 @@ export async function startQuestion(
   const getResolvedModel = () =>
     modelPreference.get() ?? defaultResolvedModel.model;
   const getModelName = () => formatResolvedModel(getResolvedModel());
-  const hideKey = config.keybind || DEFAULT_KEYBIND;
+  const hideKey = config.keybind;
   const previousFocus = api.renderer.currentFocusedRenderable;
 
   const dialogState: AnswerDialogState = {
@@ -112,6 +111,9 @@ export async function startQuestion(
     streamingAnswer: "",
     loading: false,
     scrollbarVisible: false,
+    spinnerFrame: 0,
+    thinkingEnabled: config.enableThinking,
+    expandedThinkingPartIDs: {},
     update: getUpdateWarning?.(),
     notice: formatMiniNotice(
       defaultResolvedModel.notice,
@@ -131,6 +133,7 @@ export async function startQuestion(
   let renderTimer: ReturnType<typeof setTimeout> | undefined;
   let scrollTimer: ReturnType<typeof setTimeout> | undefined;
   let focusTimer: ReturnType<typeof setTimeout> | undefined;
+  let spinnerTimer: ReturnType<typeof setInterval> | undefined;
   let overlayInput: InputRenderable | undefined;
   let overlayScroller: ScrollBoxRenderable | undefined;
 
@@ -144,6 +147,24 @@ export async function startQuestion(
     if (!focusTimer) return;
     clearTimeout(focusTimer);
     focusTimer = undefined;
+  };
+
+  const clearSpinnerTimer = () => {
+    if (!spinnerTimer) return;
+    clearInterval(spinnerTimer);
+    spinnerTimer = undefined;
+  };
+
+  const startSpinnerTimer = () => {
+    if (spinnerTimer || closed || hidden || !dialogState.loading) return;
+    spinnerTimer = setInterval(() => {
+      if (closed || hidden || !dialogState.loading) {
+        clearSpinnerTimer();
+        return;
+      }
+      dialogState.spinnerFrame = (dialogState.spinnerFrame + 1) % 10;
+      renderOverlay();
+    }, 80);
   };
 
   const scheduleInputFocus = () => {
@@ -186,11 +207,14 @@ export async function startQuestion(
     }
     clearScrollTimer();
     clearFocusTimer();
+    clearSpinnerTimer();
     setOverlay(undefined);
     restorePreviousFocus();
     api.ui.toast({
       variant: "info",
-      message: `mini hidden. Press ${hideKey} to show it.`,
+      message: hideKey
+        ? `mini hidden. Press ${hideKey} to show it.`
+        : "mini hidden. Run /mini to show it.",
       duration: 1000,
     });
   };
@@ -216,6 +240,7 @@ export async function startQuestion(
     if (renderTimer) clearTimeout(renderTimer);
     clearScrollTimer();
     clearFocusTimer();
+    clearSpinnerTimer();
     setOverlay(undefined);
     restorePreviousFocus();
     if (!tempSessionID) return;
@@ -261,6 +286,21 @@ export async function startQuestion(
     }
   };
 
+  const toggleThinking = () => {
+    dialogState.thinkingEnabled = !dialogState.thinkingEnabled;
+    dialogState.expandedThinkingPartIDs = {};
+    renderOverlay();
+  };
+
+  const toggleThinkingPart = (partID: string) => {
+    if (dialogState.expandedThinkingPartIDs[partID]) {
+      delete dialogState.expandedThinkingPartIDs[partID];
+    } else {
+      dialogState.expandedThinkingPartIDs[partID] = true;
+    }
+    renderOverlay();
+  };
+
   const renderOverlay = (options: { focusInput?: boolean } = {}) => {
     if (closed) return;
     if (renderTimer) {
@@ -274,6 +314,7 @@ export async function startQuestion(
       version,
       modelName: getModelName(),
       hideKey,
+      toggleThinkingKeybind: config.toggleThinkingKeybind,
       state: dialogState,
       onScroller: (scroller) => {
         overlayScroller = scroller;
@@ -286,11 +327,15 @@ export async function startQuestion(
       onContinue: () => void continueInMainThread(),
       onChangeModel: () =>
         openPickerFn(() => renderOverlay({ focusInput: true })),
+      onToggleThinking: toggleThinking,
+      onToggleThinkingPart: toggleThinkingPart,
       onSubmit: submitPrompt,
       scrollBy: (delta) => overlayScroller?.scrollBy(delta),
       scrollTo: (position) => overlayScroller?.scrollTo(position),
     });
     if (options.focusInput) scheduleInputFocus();
+    if (dialogState.loading) startSpinnerTimer();
+    else clearSpinnerTimer();
     if (dialogState.loading || dialogState.streamingAnswer)
       scheduleScrollToBottom();
   };
@@ -304,6 +349,7 @@ export async function startQuestion(
       resolvedAgent,
     });
     dialogState.loading = false;
+    clearSpinnerTimer();
   };
 
   const show = () => {
@@ -352,6 +398,7 @@ export async function startQuestion(
     dialogState.error = undefined;
     dialogState.errorDetail = undefined;
     dialogState.loading = true;
+    dialogState.spinnerFrame = 0;
     dialogState.streamingAnswer = "";
     submissionModelQueue.push(getModelName());
 
@@ -425,6 +472,7 @@ export async function startQuestion(
           dialogState.streamingAnswer = "No response generated.";
         }
         dialogState.loading = false;
+        clearSpinnerTimer();
         renderOverlay();
       }),
     );

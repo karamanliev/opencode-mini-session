@@ -48,7 +48,13 @@ function buildSyntaxStyle(
 
 type MiniPart =
   | { type: "text"; text: string }
-  | { type: "reasoning"; text: string }
+  | {
+      type: "reasoning";
+      id: string;
+      text: string;
+      time?: { start?: number; end?: number };
+      metadata?: unknown;
+    }
   | { type: "tool"; text: string; status: string }
   | { type: "meta"; text: string };
 
@@ -58,6 +64,19 @@ type MiniMessage = {
   parts: MiniPart[];
   modelName?: string;
 };
+
+const THINKING_SPINNER_FRAMES = [
+  "⠋",
+  "⠙",
+  "⠹",
+  "⠸",
+  "⠼",
+  "⠴",
+  "⠦",
+  "⠧",
+  "⠇",
+  "⠏",
+];
 
 export function AnswerDialog(props: AnswerDialogProps) {
   const theme = props.api.theme.current;
@@ -187,10 +206,19 @@ export function AnswerDialog(props: AnswerDialogProps) {
                       </b>
                     </text>
                     {message.parts.map((part, index) => (
-                      <box
-                        marginTop={getMiniPartTopMargin(message.parts, index)}
-                      >
-                        {message.role === "assistant" &&
+                      <box marginTop={getMiniPartTopMargin(message.parts, index)}>
+                        {part.type === "reasoning" ? (
+                          <ThinkingPart
+                            api={props.api}
+                            part={part}
+                            expanded={isThinkingPartExpanded(
+                              props.state,
+                              part,
+                            )}
+                            spinnerFrame={props.state.spinnerFrame}
+                            onToggle={() => props.onToggleThinkingPart(part.id)}
+                          />
+                        ) : message.role === "assistant" &&
                         part.type === "text" &&
                         !props.state.loading ? (
                           <markdown
@@ -288,8 +316,14 @@ export function AnswerDialog(props: AnswerDialogProps) {
               <ActionButton
                 api={props.api}
                 label="Toggle"
-                keybind={props.hideKey}
+                keybind={props.hideKey || undefined}
                 onPress={props.onHide}
+              />
+              <ActionButton
+                api={props.api}
+                label="Thinking"
+                keybind={props.toggleThinkingKeybind || undefined}
+                onPress={props.onToggleThinking}
               />
               <ActionButton
                 api={props.api}
@@ -312,7 +346,7 @@ function buildMiniMessages(state: AnswerDialogState): MiniMessage[] {
       id: entry.info.id,
       role: entry.info.role,
       parts: entry.parts
-        .map(toMiniPart)
+        .flatMap(toMiniParts)
         .filter((part): part is MiniPart => Boolean(part)),
       modelName:
         entry.info.role === "assistant"
@@ -376,6 +410,38 @@ function buildMiniMessages(state: AnswerDialogState): MiniMessage[] {
   return messages;
 }
 
+type ThinkingMiniPart = Extract<MiniPart, { type: "reasoning" }>;
+
+function ThinkingPart(props: {
+  api: TuiPluginApi;
+  part: ThinkingMiniPart;
+  expanded: boolean;
+  spinnerFrame: number;
+  onToggle: () => void;
+}) {
+  const theme = props.api.theme.current;
+  const header = () =>
+    formatThinkingHeader(props.part, props.expanded, props);
+  const body = () => getThinkingBodyText(props.part);
+
+  return (
+    <box flexDirection="column" gap={0} opacity={props.expanded ? 0.65 : 1}>
+      <box onMouseUp={props.onToggle}>
+        <text fg={theme.warning}>
+          <Show when={!props.expanded} fallback={header()}>
+            <b>{header()}</b>
+          </Show>
+        </text>
+      </box>
+      <Show when={props.expanded && body()}>
+        <box marginLeft={2} marginTop={1}>
+          <text fg={theme.markdownBlockQuote}>{body()}</text>
+        </box>
+      </Show>
+    </box>
+  );
+}
+
 function estimateMiniMessagesHeight(
   messages: MiniMessage[],
   state: AnswerDialogState,
@@ -384,8 +450,22 @@ function estimateMiniMessagesHeight(
   let lines = 0;
   for (const message of messages) {
     lines += 1;
-    for (const part of message.parts) {
-      lines += estimateWrappedLines(formatMiniPart(part), width);
+    for (let index = 0; index < message.parts.length; index++) {
+      const part = message.parts[index];
+      lines += getMiniPartTopMargin(message.parts, index);
+      if (part.type === "reasoning") {
+        lines += estimateWrappedLines(
+          formatThinkingHeader(part, isThinkingPartExpanded(state, part), state),
+          width,
+        );
+        if (isThinkingPartExpanded(state, part)) {
+          const body = getThinkingBodyText(part);
+          if (body)
+            lines += 1 + estimateWrappedLines(body, Math.max(1, width - 2));
+        }
+      } else {
+        lines += estimateWrappedLines(formatMiniPart(part), width);
+      }
     }
     lines += 1;
   }
@@ -416,14 +496,21 @@ function getMiniPartTopMargin(parts: MiniPart[], index: number) {
   if (index === 0) return 0;
   const previous = parts[index - 1];
   const current = parts[index];
+  if (current.type === "reasoning" && previous.type === "reasoning") return 1;
   return current.type === "text" && previous.type !== "text" ? 1 : 0;
+}
+
+function toMiniParts(part: Part): MiniPart[] {
+  if (part.type === "reasoning" && part.text.trim())
+    return toReasoningMiniParts(part);
+
+  const miniPart = toMiniPart(part);
+  return miniPart ? [miniPart] : [];
 }
 
 function toMiniPart(part: Part): MiniPart | undefined {
   if (part.type === "text" && part.text.trim())
     return { type: "text", text: part.text.trim() };
-  if (part.type === "reasoning" && part.text.trim())
-    return { type: "reasoning", text: part.text.trim() };
   if (part.type === "tool") {
     const toolName = part.tool.charAt(0).toUpperCase() + part.tool.slice(1);
     const inputSummary = summarizeToolInput(part.state.input);
@@ -449,6 +536,21 @@ function toMiniPart(part: Part): MiniPart | undefined {
   return undefined;
 }
 
+function toReasoningMiniParts(part: Extract<Part, { type: "reasoning" }>) {
+  const baseID = getReasoningPartID(part);
+  const time = "time" in part && isReasoningTime(part.time) ? part.time : undefined;
+  const metadata = "metadata" in part ? part.metadata : undefined;
+  return [
+    {
+    type: "reasoning" as const,
+    id: baseID,
+    text: part.text.trim(),
+    time,
+    metadata,
+    },
+  ];
+}
+
 function summarizeToolInput(
   input: { [key: string]: unknown } | undefined,
 ): string {
@@ -464,8 +566,96 @@ function summarizeToolInput(
 }
 
 function formatMiniPart(part: MiniPart) {
-  if (part.type === "reasoning") return `thinking: ${part.text}`;
   return part.text;
+}
+
+function getReasoningPartID(part: Extract<Part, { type: "reasoning" }>) {
+  return "id" in part && typeof part.id === "string" ? part.id : part.text;
+}
+
+function isReasoningTime(
+  value: unknown,
+): value is { start?: number; end?: number } {
+  return Boolean(value && typeof value === "object");
+}
+
+function isThinkingPartExpanded(
+  state: AnswerDialogState,
+  part: ThinkingMiniPart,
+) {
+  const toggled = Boolean(state.expandedThinkingPartIDs[part.id]);
+  return state.thinkingEnabled ? !toggled : toggled;
+}
+
+function formatThinkingHeader(
+  part: ThinkingMiniPart,
+  expanded: boolean,
+  spinnerSource: Pick<AnswerDialogState, "spinnerFrame">,
+) {
+  const title = getThinkingTitle(part);
+  const duration = formatThinkingDuration(part.time);
+  const prefix = isThinkingPartLoading(part)
+    ? `${THINKING_SPINNER_FRAMES[spinnerSource.spinnerFrame]} `
+    : expanded
+      ? "- "
+      : "+ ";
+  if (title) return `${prefix}Thought: ${title}${duration ? ` · ${duration}` : ""}`;
+  return `${prefix}Thought${duration ? `: ${duration}` : ""}`;
+}
+
+function isThinkingPartLoading(part: ThinkingMiniPart) {
+  if (!part.time) return false;
+  const start = Number(part.time.start);
+  const end = Number(part.time.end);
+  return Number.isFinite(start) && !Number.isFinite(end);
+}
+
+function getThinkingTitle(part: ThinkingMiniPart) {
+  return getExplicitThinkingTitle(part.text);
+}
+
+function getExplicitThinkingTitle(text: string) {
+  const line = text
+    .split("\n")
+    .find((candidate) => candidate.trim().length > 0)
+    ?.trim();
+  const match = line?.match(/^\*\*(.+?)\*\*/);
+  return match?.[1]?.trim() ? truncateThinkingTitle(match[1].trim()) : "";
+}
+
+function truncateThinkingTitle(title: string) {
+  return title.length > 80 ? `${title.slice(0, 77).trim()}...` : title;
+}
+
+function getThinkingBodyText(part: ThinkingMiniPart) {
+  const lines = part.text.split("\n");
+  const title = getThinkingTitle(part);
+  const titleIndex = lines.findIndex((line) => line.trim().length > 0);
+  if (titleIndex === -1) return "";
+
+  if (!title) return part.text;
+
+  lines[titleIndex] = lines[titleIndex].replace(/^\s*\*\*(.+?)\*\*/, "");
+
+  return lines
+    .slice(titleIndex)
+    .join("\n")
+    .replace(/^\s+/, "")
+    .trimEnd();
+}
+
+function formatThinkingDuration(time: ThinkingMiniPart["time"]) {
+  if (!time) return "";
+  const start = Number(time.start);
+  const end = Number(time.end);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start)
+    return "";
+  const diff = end - start;
+  const milliseconds =
+    start > 10_000_000_000 || end > 10_000_000_000 ? diff : diff * 1000;
+  if (milliseconds < 1000) return `${Math.round(milliseconds)}ms`;
+  const seconds = milliseconds / 1000;
+  return seconds < 10 ? `${seconds.toFixed(1)}s` : `${Math.round(seconds)}s`;
 }
 
 function getMiniPartColor(
@@ -498,6 +688,7 @@ export function createOverlaySlot(getOverlay: () => OverlayState | undefined) {
             version={current().version}
             modelName={current().modelName}
             hideKey={current().hideKey}
+            toggleThinkingKeybind={current().toggleThinkingKeybind}
             state={current().state}
             onScroller={current().onScroller}
             onInput={current().onInput}
@@ -505,6 +696,8 @@ export function createOverlaySlot(getOverlay: () => OverlayState | undefined) {
             onClose={current().onClose}
             onContinue={current().onContinue}
             onChangeModel={current().onChangeModel}
+            onToggleThinking={current().onToggleThinking}
+            onToggleThinkingPart={current().onToggleThinkingPart}
             onSubmit={current().onSubmit}
           />
         )}
