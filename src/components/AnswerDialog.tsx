@@ -123,6 +123,14 @@ export function AnswerDialog(props: AnswerDialogProps) {
   const createUserMessageHint = createMemo(() =>
     getCreateUserMessageHint(props.state),
   );
+  const footerModelName = createMemo(() =>
+    formatFooterModelName(props.modelName, {
+      width: transcriptWidth,
+      canContinue: canContinue(),
+      hideKey: props.hideKey,
+      toggleThinkingKeybind: props.toggleThinkingKeybind,
+    }),
+  );
 
   return (
     <box
@@ -304,12 +312,13 @@ export function AnswerDialog(props: AnswerDialogProps) {
               if (input) input.value = "";
             }}
           />
-          <box
-            flexDirection="row"
-            justifyContent="space-between"
-            alignItems="center"
-            width={transcriptWidth}
-          >
+            <box
+              flexDirection="row"
+              justifyContent="space-between"
+              alignItems="center"
+              width={transcriptWidth}
+              gap={3}
+            >
             <box flexDirection="row" gap={2}>
               <Show when={canContinue()}>
                 <ActionButton
@@ -338,7 +347,7 @@ export function AnswerDialog(props: AnswerDialogProps) {
                 onPress={props.onChangeModel}
               />
             </box>
-            <text fg={theme.textMuted}>{props.modelName}</text>
+            <text fg={theme.textMuted}>{footerModelName()}</text>
           </box>
         </box>
       </box>
@@ -609,6 +618,49 @@ function summarizeToolInput(
 
 function formatMiniPart(part: MiniPart) {
   return part.text;
+}
+
+function formatFooterModelName(
+  modelName: string,
+  options: {
+    width: number;
+    canContinue: boolean;
+    hideKey: string | false;
+    toggleThinkingKeybind: string | false;
+  },
+) {
+  const actionWidth = getFooterActionsWidth(options);
+  const maxWidth = Math.max(0, options.width - actionWidth - 4);
+  return truncateWithEllipsis(modelName, maxWidth);
+}
+
+function getFooterActionsWidth(options: {
+  canContinue: boolean;
+  hideKey: string | false;
+  toggleThinkingKeybind: string | false;
+}) {
+  const actions = [
+    options.canContinue
+      ? getActionButtonWidth("Continue", "shift+enter")
+      : 0,
+    getActionButtonWidth("Toggle", options.hideKey),
+    getActionButtonWidth("Thinking", options.toggleThinkingKeybind),
+    getActionButtonWidth("Model", "tab"),
+  ].filter((width) => width > 0);
+
+  if (actions.length === 0) return 0;
+  return actions.reduce((total, width) => total + width, 0) + (actions.length - 1) * 2;
+}
+
+function getActionButtonWidth(label: string, keybind?: string | false) {
+  return label.length + (keybind ? keybind.length + 1 : 0);
+}
+
+function truncateWithEllipsis(text: string, maxWidth: number) {
+  if (maxWidth <= 0) return "";
+  if (text.length <= maxWidth) return text;
+  if (maxWidth <= 3) return ".".repeat(maxWidth);
+  return `${text.slice(0, maxWidth - 3)}...`;
 }
 
 function getReasoningPartID(part: Extract<Part, { type: "reasoning" }>) {
