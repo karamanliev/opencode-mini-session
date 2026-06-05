@@ -27,6 +27,7 @@ import type {
   ModelPreferenceState,
   OverlayState,
   ResolvedModel,
+  ThinkingPreferenceState,
 } from "./types";
 
 type ModelSelectValue =
@@ -49,6 +50,7 @@ export async function openMiniSession(
   setOverlay: Setter<OverlayState | undefined>,
   active: ActiveDialog,
   modelPreference: ModelPreferenceState,
+  thinkingPreference: ThinkingPreferenceState,
   openPickerFn: (onAfterSelect: () => void) => void,
   getUpdateWarning?: () => string | undefined,
 ) {
@@ -74,11 +76,12 @@ export async function openMiniSession(
     config,
     sessionID,
     setOverlay,
-    active,
-    modelPreference,
-    openPickerFn,
-    getUpdateWarning,
-  );
+      active,
+      modelPreference,
+      thinkingPreference,
+      openPickerFn,
+      getUpdateWarning,
+    );
 }
 
 export async function startQuestion(
@@ -88,6 +91,7 @@ export async function startQuestion(
   setOverlay: Setter<OverlayState | undefined>,
   active: ActiveDialog,
   modelPreference: ModelPreferenceState,
+  thinkingPreference: ThinkingPreferenceState,
   openPickerFn: (onAfterSelect: () => void) => void,
   getUpdateWarning?: () => string | undefined,
 ) {
@@ -112,7 +116,7 @@ export async function startQuestion(
     loading: false,
     scrollbarVisible: false,
     spinnerFrame: 0,
-    thinkingEnabled: config.enableThinking,
+    thinkingEnabled: thinkingPreference.get(),
     expandedThinkingPartIDs: {},
     update: getUpdateWarning?.(),
     notice: formatMiniNotice(
@@ -288,6 +292,7 @@ export async function startQuestion(
 
   const toggleThinking = () => {
     dialogState.thinkingEnabled = !dialogState.thinkingEnabled;
+    thinkingPreference.set(dialogState.thinkingEnabled);
     dialogState.expandedThinkingPartIDs = {};
     renderOverlay();
   };

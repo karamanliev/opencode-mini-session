@@ -33,6 +33,11 @@ export type ModelPreferenceState = {
   set: (model: ModelPreference) => void;
 };
 
+export type ThinkingPreferenceState = {
+  get: () => boolean;
+  set: (enabled: boolean) => void;
+};
+
 export type ActiveDialog = {
   get: () => ActiveDialogController | undefined;
   set: (dialog: ActiveDialogController | undefined) => void;

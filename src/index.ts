@@ -24,6 +24,7 @@ import type {
   ActiveDialogController,
   ModelPreference,
   OverlayState,
+  ThinkingPreferenceState,
 } from "./types";
 import { startAutoUpdate } from "./update";
 
@@ -38,10 +39,17 @@ const tui: TuiPlugin = async (api, options, meta) => {
     undefined,
     { equals: false },
   );
+  const [thinkingEnabled, setThinkingEnabled] = createSignal(
+    config.enableThinking,
+  );
   const [originSessionID, setOriginSessionID] = createSignal<string | undefined>(undefined);
   const [updateWarning, setUpdateWarning] = createSignal<string | undefined>(undefined);
   let activeDialog: ActiveDialogController | undefined;
   let modelPickerOpen = false;
+  const thinkingPreference: ThinkingPreferenceState = {
+    get: thinkingEnabled,
+    set: setThinkingEnabled,
+  };
 
   api.lifecycle.onDispose(() => activeDialog?.close());
   startAutoUpdate(api, meta, setUpdateWarning);
@@ -145,7 +153,7 @@ const tui: TuiPlugin = async (api, options, meta) => {
           }, {
             get: selectedModel,
             set: setSelectedModel,
-          }, (onAfterSelect) => openModelPicker(api, config, sessionID, { get: selectedModel, set: setSelectedModel }, () => {
+          }, thinkingPreference, (onAfterSelect) => openModelPicker(api, config, sessionID, { get: selectedModel, set: setSelectedModel }, () => {
               modelPickerOpen = false;
               onAfterSelect();
             }), updateWarning);
