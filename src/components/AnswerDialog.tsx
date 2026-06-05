@@ -206,7 +206,13 @@ export function AnswerDialog(props: AnswerDialogProps) {
                       </b>
                     </text>
                     {message.parts.map((part, index) => (
-                      <box marginTop={getMiniPartTopMargin(message.parts, index)}>
+                      <box
+                        marginTop={getMiniPartTopMargin(
+                          message.parts,
+                          index,
+                          message.role,
+                        )}
+                      >
                         {part.type === "reasoning" ? (
                           <ThinkingPart
                             api={props.api}
@@ -452,7 +458,7 @@ function estimateMiniMessagesHeight(
     lines += 1;
     for (let index = 0; index < message.parts.length; index++) {
       const part = message.parts[index];
-      lines += getMiniPartTopMargin(message.parts, index);
+      lines += getMiniPartTopMargin(message.parts, index, message.role);
       if (part.type === "reasoning") {
         lines += estimateWrappedLines(
           formatThinkingHeader(part, isThinkingPartExpanded(state, part), state),
@@ -492,8 +498,12 @@ function estimateWrappedLines(text: string, width: number) {
     );
 }
 
-function getMiniPartTopMargin(parts: MiniPart[], index: number) {
-  if (index === 0) return 0;
+function getMiniPartTopMargin(
+  parts: MiniPart[],
+  index: number,
+  role: MiniMessage["role"],
+) {
+  if (index === 0) return parts[0]?.type === "reasoning" && role === "assistant" ? 1 : 0;
   const previous = parts[index - 1];
   const current = parts[index];
   if (current.type === "reasoning" && previous.type === "reasoning") return 1;
@@ -540,15 +550,47 @@ function toReasoningMiniParts(part: Extract<Part, { type: "reasoning" }>) {
   const baseID = getReasoningPartID(part);
   const time = "time" in part && isReasoningTime(part.time) ? part.time : undefined;
   const metadata = "metadata" in part ? part.metadata : undefined;
-  return [
-    {
+  const segments = splitReasoningText(part.text.trim());
+
+  return segments.map((text, index) => ({
     type: "reasoning" as const,
-    id: baseID,
-    text: part.text.trim(),
-    time,
+    id: segments.length === 1 ? baseID : `${baseID}:${index}`,
+    text,
+    time: index === 0 ? time : undefined,
     metadata,
-    },
-  ];
+  }));
+}
+
+function splitReasoningText(text: string) {
+  const titlePattern = /\*\*([^*\n]+)\*\*/g;
+  const matches = [...text.matchAll(titlePattern)].filter((match) =>
+    isReasoningTitleMatch(text, match.index ?? -1),
+  );
+
+  if (matches.length <= 1) return [text];
+
+  const segments: string[] = [];
+  if ((matches[0].index ?? 0) > 0) {
+    const intro = text.slice(0, matches[0].index).trim();
+    if (intro) segments.push(intro);
+  }
+
+  for (let index = 0; index < matches.length; index++) {
+    const start = matches[index].index ?? 0;
+    const end = matches[index + 1]?.index ?? text.length;
+    const segment = text.slice(start, end).trim();
+    if (segment) segments.push(segment);
+  }
+
+  return segments.length > 0 ? segments : [text];
+}
+
+function isReasoningTitleMatch(text: string, index: number) {
+  if (index < 0) return false;
+  if (index === 0) return true;
+  const before = text.slice(0, index).trimEnd();
+  if (!before) return true;
+  return /[.!?)]$/.test(before) || before.endsWith("...");
 }
 
 function summarizeToolInput(
