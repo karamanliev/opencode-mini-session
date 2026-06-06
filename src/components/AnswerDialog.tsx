@@ -7,6 +7,7 @@ import {
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { Part } from "@opencode-ai/sdk/v2";
 import { createMemo, Show } from "solid-js";
+import { formatTokenCount } from "../counter";
 import { THINKING_TEXT } from "../constants";
 import type {
   AnswerDialogProps,
@@ -15,7 +16,7 @@ import type {
 } from "../types";
 import { extractAssistantText } from "../session";
 import { ActionButton } from "./ActionButton";
-import { HintBar } from "./HintBar";
+import { HintBar, type HintBarItem } from "./HintBar";
 
 function buildSyntaxStyle(
   theme: TuiPluginApi["theme"]["current"],
@@ -92,7 +93,7 @@ export function AnswerDialog(props: AnswerDialogProps) {
     12,
     Math.min(screenHeight - 6, Math.floor(screenHeight * 0.68)),
   );
-  const transcriptHeight = Math.max(5, panelHeight - 10);
+  const transcriptHeight = Math.max(5, panelHeight - 12);
   const transcriptWidth = Math.max(20, panelWidth - 6);
   const transcriptContentWidth = Math.max(20, transcriptWidth - 5);
 
@@ -123,14 +124,15 @@ export function AnswerDialog(props: AnswerDialogProps) {
   const createUserMessageHint = createMemo(() =>
     getCreateUserMessageHint(props.state),
   );
-  const footerModelName = createMemo(() =>
-    formatFooterModelName(props.modelName, {
-      width: transcriptWidth,
-      canContinue: canContinue(),
-      hideKey: props.hideKey,
-      toggleThinkingKeybind: props.toggleThinkingKeybind,
-    }),
-  );
+  const footerCounter = createMemo(() => props.state.footerCounter);
+  const hintItems = createMemo<HintBarItem[]>(() => [
+    { keybind: "enter", label: "send" },
+    { keybind: canContinue() ? "shift+enter" : false, label: "continue" },
+    { keybind: "tab", label: "model" },
+    { keybind: props.toggleThinkingKeybind, label: "thinking" },
+    { keybind: props.hideKey, label: "hide" },
+    { keybind: "esc", label: "close" },
+  ]);
 
   return (
     <box
@@ -163,7 +165,7 @@ export function AnswerDialog(props: AnswerDialogProps) {
           paddingLeft={3}
           paddingRight={3}
           flexDirection="row"
-          justifyContent="space-between"
+          justifyContent="flex-start"
           alignItems="center"
           marginBottom={1}
         >
@@ -175,7 +177,6 @@ export function AnswerDialog(props: AnswerDialogProps) {
               {(version) => <text fg={theme.textMuted}>{version()}</text>}
             </Show>
           </box>
-          <HintBar api={props.api} hideKey={props.hideKey} />
         </box>
         {/* transcript */}
         <box paddingLeft={3} paddingRight={3}>
@@ -272,19 +273,50 @@ export function AnswerDialog(props: AnswerDialogProps) {
             </box>
           </scrollbox>
         </box>
-        {/* separator */}
-        <text marginTop={1} fg={theme.borderSubtle}>
-          {"─".repeat(panelWidth)}
-        </text>
-        {/* input + actions */}
         <box
           paddingLeft={3}
           paddingRight={3}
           paddingBottom={1}
+          paddingTop={1}
           flexDirection="column"
           gap={1}
           marginTop={1}
+          backgroundColor={theme.borderSubtle}
         >
+          <box
+            flexDirection="row"
+            justifyContent="flex-start"
+            alignItems="center"
+            width={transcriptWidth}
+            gap={2}
+          >
+            <Show when={canContinue()}>
+              <ActionButton
+                api={props.api}
+                label="Continue"
+                keybind="shift+enter"
+                onPress={props.onContinue}
+              />
+            </Show>
+            <ActionButton
+              api={props.api}
+              label="Toggle"
+              keybind={props.hideKey || undefined}
+              onPress={props.onHide}
+            />
+            <ActionButton
+              api={props.api}
+              label="Thinking"
+              keybind={props.toggleThinkingKeybind || undefined}
+              onPress={props.onToggleThinking}
+            />
+            <ActionButton
+              api={props.api}
+              label="Model"
+              keybind="tab"
+              onPress={props.onChangeModel}
+            />
+          </box>
           <input
             ref={(node) => {
               input = node;
@@ -292,9 +324,10 @@ export function AnswerDialog(props: AnswerDialogProps) {
             }}
             width={transcriptWidth}
             placeholder={
-              props.state.loading
+              props.state.inputPlaceholder ??
+              (props.state.loading
                 ? "Waiting for response..."
-                : "Ask a question..."
+                : "Ask a question...")
             }
             textColor={theme.text}
             placeholderColor={theme.textMuted}
@@ -313,43 +346,17 @@ export function AnswerDialog(props: AnswerDialogProps) {
               if (input) input.value = "";
             }}
           />
-            <box
-              flexDirection="row"
-              justifyContent="space-between"
-              alignItems="center"
-              width={transcriptWidth}
-              gap={3}
-            >
-            <box flexDirection="row" gap={2}>
-              <Show when={canContinue()}>
-                <ActionButton
-                  api={props.api}
-                  label="Continue"
-                  keybind="shift+enter"
-                  onPress={props.onContinue}
-                />
-              </Show>
-              <ActionButton
-                api={props.api}
-                label="Toggle"
-                keybind={props.hideKey || undefined}
-                onPress={props.onHide}
-              />
-              <ActionButton
-                api={props.api}
-                label="Thinking"
-                keybind={props.toggleThinkingKeybind || undefined}
-                onPress={props.onToggleThinking}
-              />
-              <ActionButton
-                api={props.api}
-                label="Model"
-                keybind="tab"
-                onPress={props.onChangeModel}
-              />
-            </box>
-            <text fg={theme.textMuted}>{footerModelName()}</text>
+          <box
+            flexDirection="row"
+            justifyContent="space-between"
+            alignItems="center"
+            width={transcriptWidth}
+            gap={3}
+          >
+            <text fg={theme.textMuted}>{props.modelName}</text>
+            <FooterCounter api={props.api} state={footerCounter()} />
           </box>
+          <HintBar api={props.api} items={hintItems()} />
         </box>
       </box>
     </box>
@@ -646,6 +653,42 @@ function summarizeToolInput(
 
 function formatMiniPart(part: MiniPart) {
   return part.text;
+}
+
+function FooterCounter(props: {
+  api: TuiPluginApi;
+  state: AnswerDialogState["footerCounter"];
+}) {
+  const theme = props.api.theme.current;
+
+  if (!props.state.miniSession && !props.state.copiedContext) return <text />;
+
+  return (
+    <box flexDirection="row" gap={1}>
+      <Show when={props.state.miniSession}>
+        {(miniSession) => (
+          <text fg={miniSession().warning ? theme.warning : theme.textMuted}>
+            {miniSession().text}
+          </text>
+        )}
+      </Show>
+      <Show when={props.state.miniSession && props.state.copiedContext}>
+        <text fg={theme.textMuted}>|</text>
+      </Show>
+      <Show when={props.state.copiedContext}>
+        {(copiedContext) => (
+          <box flexDirection="row" gap={0}>
+            <text fg={theme.textMuted}>
+              {formatTokenCount(copiedContext().usedTokens)} /{" "}
+            </text>
+            <text fg={copiedContext().capReached ? theme.warning : theme.textMuted}>
+              {formatTokenCount(copiedContext().tokenLimit)}
+            </text>
+          </box>
+        )}
+      </Show>
+    </box>
+  );
 }
 
 function formatFooterModelName(

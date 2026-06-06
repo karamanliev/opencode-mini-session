@@ -468,7 +468,7 @@ describe("startQuestion", () => {
 
   it("stores exact completed input tokens after session idle", async () => {
     resolveRuntimeMiniAgent.mockResolvedValue(resolvedAgent());
-    getSessionEntries.mockReturnValue([
+    (getSessionEntries as any).mockReturnValue([
       assistantEntry({
         id: "assistant-1",
         text: "answer",
@@ -484,7 +484,7 @@ describe("startQuestion", () => {
       return () => {};
     });
     let overlay: OverlayState | undefined;
-    const modelPreference = {
+    const modelPreference: any = {
       get: () => ({
         model: {
           providerID: "anthropic",
@@ -521,7 +521,7 @@ describe("startQuestion", () => {
 
     const handlers: Record<string, (event: any) => void> = {};
     const api = fakeApi();
-    getSessionEntries.mockReturnValue([
+    (getSessionEntries as any).mockReturnValue([
       assistantEntry({
         id: "assistant-1",
         text: "answer",
@@ -534,7 +534,7 @@ describe("startQuestion", () => {
       return () => {};
     });
     let overlay: OverlayState | undefined;
-    const modelPreference = {
+    const modelPreference: any = {
       get: () => ({
         model: {
           providerID: "anthropic",
@@ -560,7 +560,7 @@ describe("startQuestion", () => {
     );
 
     handlers["session.idle"]({ properties: { sessionID: "mini-session" } });
-    getSessionEntries.mockReturnValue([
+    (getSessionEntries as any).mockReturnValue([
       assistantEntry({
         id: "assistant-1",
         text: "answer",
@@ -584,7 +584,7 @@ describe("startQuestion", () => {
 
     const api = fakeApi();
     let overlay: OverlayState | undefined;
-    const modelPreference = {
+    const modelPreference: any = {
       get: vi.fn(() => undefined),
       set: vi.fn(),
     };
@@ -625,7 +625,7 @@ describe("startQuestion", () => {
 
     const api = fakeApi();
     let overlay: OverlayState | undefined;
-    const modelPreference = {
+    const modelPreference: any = {
       get: vi.fn(() => undefined),
       set: vi.fn(),
     };
@@ -669,7 +669,7 @@ describe("startQuestion", () => {
 
     const api = fakeApi();
     let overlay: OverlayState | undefined;
-    const modelPreference = {
+    const modelPreference: any = {
       get: vi.fn(() => undefined),
       set: vi.fn(),
     };
