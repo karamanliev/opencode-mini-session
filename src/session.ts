@@ -12,6 +12,7 @@ import {
   buildMiniSystemPrompt,
   formatMiniNotice,
   resolveRuntimeMiniAgent,
+  type ResolvedMiniAgent,
 } from "./agent";
 import { getSessionEntries, formatFullContext } from "./context";
 import { getErrorMessage } from "./diagnostics";
@@ -102,8 +103,6 @@ export async function startQuestion(
   const entries = getSessionEntries(api, sessionID);
   const context =
     mode === "main" ? formatFullContext(entries, config.tokenLimit) : "";
-  const resolvedAgent = await resolveRuntimeMiniAgent(api, config);
-  const system = buildMiniSystemPrompt(context, resolvedAgent, mode);
   const defaultResolvedModel = resolveDefaultModel(
     api.state.provider,
     config.model,
@@ -117,6 +116,8 @@ export async function startQuestion(
   const hiddenCommand = mode === "fresh" ? "/mini-fresh" : "/mini";
   const title = mode === "fresh" ? "mini fresh" : "mini session";
   const previousFocus = api.renderer.currentFocusedRenderable;
+  let resolvedAgent: ResolvedMiniAgent;
+  let system = "";
 
   const dialogState: AnswerDialogState = {
     entries: [],
@@ -127,10 +128,7 @@ export async function startQuestion(
     thinkingEnabled: thinkingPreference.get(),
     expandedThinkingPartIDs: {},
     update: getUpdateWarning?.(),
-    notice: formatMiniNotice(
-      defaultResolvedModel.notice,
-      ...resolvedAgent.notices,
-    ),
+    notice: undefined,
     errorDetail: undefined,
     messageModels: {},
   };
@@ -388,6 +386,15 @@ export async function startQuestion(
 
   active.set(controller);
   renderOverlay({ focusInput: true });
+
+  resolvedAgent = await resolveRuntimeMiniAgent(api, config);
+  if (closed) return;
+  system = buildMiniSystemPrompt(context, resolvedAgent, mode);
+  dialogState.notice = formatMiniNotice(
+    defaultResolvedModel.notice,
+    ...resolvedAgent.notices,
+  );
+  renderOverlay();
 
   function submitPrompt(value: string) {
     const prompt = value.trim();
