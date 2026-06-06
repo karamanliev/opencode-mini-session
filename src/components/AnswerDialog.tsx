@@ -93,7 +93,7 @@ export function AnswerDialog(props: AnswerDialogProps) {
     12,
     Math.min(screenHeight - 6, Math.floor(screenHeight * 0.68)),
   );
-  const transcriptHeight = Math.max(5, panelHeight - 12);
+  const transcriptHeight = Math.max(4, panelHeight - 13);
   const transcriptWidth = Math.max(20, panelWidth - 6);
   const transcriptContentWidth = Math.max(20, transcriptWidth - 5);
 
@@ -133,6 +133,9 @@ export function AnswerDialog(props: AnswerDialogProps) {
     { keybind: props.hideKey, label: "hide" },
     { keybind: "esc", label: "close" },
   ]);
+  const footerModelName = createMemo(() =>
+    truncateWithEllipsis(props.modelName, Math.max(12, Math.floor(transcriptWidth * 0.42))),
+  );
 
   return (
     <box
@@ -353,7 +356,7 @@ export function AnswerDialog(props: AnswerDialogProps) {
             width={transcriptWidth}
             gap={3}
           >
-            <text fg={theme.textMuted}>{props.modelName}</text>
+            <text fg={theme.textMuted}>{footerModelName()}</text>
             <FooterCounter api={props.api} state={footerCounter()} />
           </box>
           <HintBar api={props.api} items={hintItems()} />
@@ -689,42 +692,6 @@ function FooterCounter(props: {
       </Show>
     </box>
   );
-}
-
-function formatFooterModelName(
-  modelName: string,
-  options: {
-    width: number;
-    canContinue: boolean;
-    hideKey: string | false;
-    toggleThinkingKeybind: string | false;
-  },
-) {
-  const actionWidth = getFooterActionsWidth(options);
-  const maxWidth = Math.max(0, options.width - actionWidth - 4);
-  return truncateWithEllipsis(modelName, maxWidth);
-}
-
-function getFooterActionsWidth(options: {
-  canContinue: boolean;
-  hideKey: string | false;
-  toggleThinkingKeybind: string | false;
-}) {
-  const actions = [
-    options.canContinue
-      ? getActionButtonWidth("Continue", "shift+enter")
-      : 0,
-    getActionButtonWidth("Toggle", options.hideKey),
-    getActionButtonWidth("Thinking", options.toggleThinkingKeybind),
-    getActionButtonWidth("Model", "tab"),
-  ].filter((width) => width > 0);
-
-  if (actions.length === 0) return 0;
-  return actions.reduce((total, width) => total + width, 0) + (actions.length - 1) * 2;
-}
-
-function getActionButtonWidth(label: string, keybind?: string | false) {
-  return label.length + (keybind ? keybind.length + 1 : 0);
 }
 
 function truncateWithEllipsis(text: string, maxWidth: number) {

@@ -54,7 +54,7 @@ describe("counter helpers", () => {
       },
       miniSession: {
         usedTokens: 11_240,
-        percentUsed: 7.025,
+        percentUsed: 7,
         text: "11.2K (7%)",
         warning: false,
         limitReached: false,
@@ -108,6 +108,23 @@ describe("counter helpers", () => {
         limitReached: true,
       },
       placeholder: "Session context limit reached...",
+    });
+  });
+
+  it("applies thresholds using the displayed rounded percentage", () => {
+    expect(
+      buildFooterCounterState({
+        mode: "fresh",
+        tokenLimit: 50_000,
+        lastCompletedMiniInputTokens: 84_600,
+        modelContextWindow: 100_000,
+      }).miniSession,
+    ).toEqual({
+      usedTokens: 84_600,
+      percentUsed: 85,
+      text: "84.6K (85%)",
+      warning: true,
+      limitReached: false,
     });
   });
 });

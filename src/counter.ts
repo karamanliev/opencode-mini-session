@@ -35,6 +35,11 @@ export function getUsagePercent(usedTokens: number, limit: number) {
   return (usedTokens / limit) * 100;
 }
 
+export function getDisplayPercent(usedTokens: number, limit: number) {
+  const percent = getUsagePercent(usedTokens, limit);
+  return percent === undefined ? undefined : Math.round(percent);
+}
+
 export function isMiniSessionWarning(percentUsed?: number) {
   return Boolean(percentUsed !== undefined && percentUsed >= MINI_SESSION_WARNING_PERCENT);
 }
@@ -79,7 +84,7 @@ export function buildFooterCounterState(options: {
 function buildMiniSessionCounter(usedTokens: number, modelContextWindow?: number) {
   const percentUsed =
     modelContextWindow !== undefined
-      ? getUsagePercent(usedTokens, modelContextWindow)
+      ? getDisplayPercent(usedTokens, modelContextWindow)
       : undefined;
 
   return {
