@@ -1,6 +1,6 @@
 # OpenCode mini session
 
-An OpenCode TUI plugin that opens interactive temporary mini sessions for side questions, either with copied main-session context or as a fresh no-context thread.
+An OpenCode TUI plugin that opens interactive temporary mini sessions for side questions, either with injected main-session context or as a fresh no-context thread.
 
 https://github.com/user-attachments/assets/8201b065-2569-41ba-8eb7-ac2abddad2a5
 
@@ -33,7 +33,7 @@ Press `alt+b` for the default mini mode, or `alt+n` for a fresh mini mode with n
 |---|---|
 | `enter` | Send question / follow-up |
 | `shift+enter` | Inject mini transcript into the main thread |
-| Active mode keybind, `alt+b` or `alt+n` | Hide overlay, resumable |
+| `alt+b` or `alt+n` (configurable) | Hide overlay, resumable |
 | `ctrl+t` (configurable) | Toggle thinking blocks |
 | `tab` | Change the model for the next question |
 | `esc` / `ctrl+c` | Cancel and close |
@@ -79,10 +79,9 @@ If you want to customize the plugin, your config should look something like this
       "tokenLimit": 10000,
       "keybind": "alt+m",
       "freshKeybind": "alt+f",
-      "enableThinking": false,
-      "toggleThinkingKeybind": "ctrl+t",
-      "agent": "build",
-      ...
+      "enableThinking": true,
+      "toggleThinkingKeybind": "alt+a",
+      "agent": "build"
     }]
   ]
 }
@@ -107,14 +106,6 @@ For example, configure mini to use a custom `pirate` agent:
 ```
 
 ![Mini session using a custom pirate agent](.github/pirate.png)
-
-## Mini modes
-
-`mini` copies the current session conversation into the temporary session before you ask the first question.
-
-`mini fresh` still opens from the current OpenCode session and uses the same working directory, model controls, and continue-in-main-thread flow, but it does not copy any conversation context from the main session.
-
-Only one mini overlay can be active at a time. Opening one mode closes the other. Pressing the active mode's keybind toggles it hidden or visible again.
 
 ## Session context
 
