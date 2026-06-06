@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveMiniRouteAction } from "../src/routing";
+import { resolveMiniRouteAction, runMiniRouteAction } from "../src/routing";
 
 describe("mini routing", () => {
   it("opens when no mini session is active", () => {
@@ -53,5 +53,35 @@ describe("mini routing", () => {
         isVisible: true,
       }),
     ).toBe("show");
+  });
+
+  it("waits for close before opening the other mode", async () => {
+    const events: string[] = [];
+    let finishClose: (() => void) | undefined;
+
+    const close = new Promise<void>((resolve) => {
+      finishClose = () => {
+        events.push("closed");
+        resolve();
+      };
+    });
+
+    const run = runMiniRouteAction({
+      action: "switch",
+      activeDialog: {
+        close: async () => {
+          events.push("closing");
+          await close;
+        },
+        hide: () => events.push("hide"),
+        show: () => events.push("show"),
+      },
+      open: () => events.push("open"),
+    });
+
+    expect(events).toEqual(["closing"]);
+    finishClose?.();
+    await run;
+    expect(events).toEqual(["closing", "closed", "open"]);
   });
 });

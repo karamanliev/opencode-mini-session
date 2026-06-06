@@ -23,7 +23,7 @@ import {
   SCROLL_PAGE_DELTA,
 } from "./constants";
 import { openMiniSession, openModelPicker } from "./session";
-import { resolveMiniRouteAction } from "./routing";
+import { resolveMiniRouteAction, runMiniRouteAction } from "./routing";
 import type {
   ActiveDialogController,
   MiniMode,
@@ -225,38 +225,30 @@ const tui: TuiPlugin = async (api, options, meta) => {
       isVisible: activeDialog?.isVisible(),
     });
 
-    if (nextAction === "hide") {
-      activeDialog?.hide();
-      return;
-    }
-
-    if (nextAction === "show") {
-      activeDialog?.show();
-      return;
-    }
-
-    if (nextAction === "switch") {
-      await activeDialog?.close();
-    }
-
-    setOriginSessionID(sessionID);
-    activeMode = mode;
-    void openMiniSession(api, config, mode, setOverlay, {
-      get: () => activeDialog,
-      set: (dialog) => {
-        activeDialog = dialog;
-        if (!dialog) {
-          activeMode = undefined;
-          setOriginSessionID(undefined);
-        }
+    await runMiniRouteAction({
+      action: nextAction,
+      activeDialog,
+      open: () => {
+        setOriginSessionID(sessionID);
+        activeMode = mode;
+        void openMiniSession(api, config, mode, setOverlay, {
+          get: () => activeDialog,
+          set: (dialog) => {
+            activeDialog = dialog;
+            if (!dialog) {
+              activeMode = undefined;
+              setOriginSessionID(undefined);
+            }
+          },
+        }, {
+          get: selectedModel,
+          set: setSelectedModel,
+        }, thinkingPreference, (onAfterSelect) => openModelPicker(api, config, sessionID, { get: selectedModel, set: setSelectedModel }, () => {
+            modelPickerOpen = false;
+            onAfterSelect();
+          }), updateWarning);
       },
-    }, {
-      get: selectedModel,
-      set: setSelectedModel,
-    }, thinkingPreference, (onAfterSelect) => openModelPicker(api, config, sessionID, { get: selectedModel, set: setSelectedModel }, () => {
-        modelPickerOpen = false;
-        onAfterSelect();
-      }), updateWarning);
+    });
   }
 };
 

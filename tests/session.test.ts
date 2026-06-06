@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { resolveRuntimeMiniAgent } = vi.hoisted(() => ({
+const { formatFullContext, resolveRuntimeMiniAgent } = vi.hoisted(() => ({
+  formatFullContext: vi.fn(() => "main context"),
   resolveRuntimeMiniAgent: vi.fn(),
 }));
 
@@ -16,7 +17,7 @@ vi.mock("../src/agent", async () => {
 
 vi.mock("../src/context", () => ({
   getSessionEntries: vi.fn(() => []),
-  formatFullContext: vi.fn(() => "main context"),
+  formatFullContext,
 }));
 
 import { startQuestion } from "../src/session";
@@ -66,13 +67,19 @@ function fakeApi() {
     client: {
       session: {
         abort: vi.fn(),
+        create: vi.fn(async () => ({ data: { id: "mini-session" } })),
         delete: vi.fn(),
+        promptAsync: vi.fn(),
       },
+    },
+    event: {
+      on: vi.fn(() => () => {}),
     },
   } as any;
 }
 
 afterEach(() => {
+  formatFullContext.mockClear();
   resolveRuntimeMiniAgent.mockReset();
 });
 
@@ -126,5 +133,117 @@ describe("startQuestion", () => {
 
     await opening;
     expect(activeDialog).toBeUndefined();
+  });
+
+  it("skips copied context formatting in fresh mode", async () => {
+    const agentResolution = deferred<any>();
+    resolveRuntimeMiniAgent.mockReturnValue(agentResolution.promise);
+
+    const opening = startQuestion(
+      fakeApi(),
+      config(),
+      "fresh",
+      "session-1",
+      vi.fn(),
+      { get: () => undefined, set: vi.fn() },
+      { get: () => undefined, set: vi.fn() },
+      { get: () => false, set: vi.fn() },
+      vi.fn(),
+    );
+
+    await Promise.resolve();
+    expect(formatFullContext).not.toHaveBeenCalled();
+
+    agentResolution.resolve({
+      mode: "plugin-managed",
+      requestedAgent: null,
+      agent: null,
+      allowedTools: ["read"],
+      permission: [],
+      permissionSource: "plugin-managed",
+      notices: [],
+    });
+
+    await opening;
+  });
+
+  it("uses the fresh keybind in the hide toast", async () => {
+    const agentResolution = deferred<any>();
+    resolveRuntimeMiniAgent.mockReturnValue(agentResolution.promise);
+
+    const api = fakeApi();
+    let activeDialog: ActiveDialogController | undefined;
+
+    const opening = startQuestion(
+      api,
+      config(),
+      "fresh",
+      "session-1",
+      vi.fn(),
+      {
+        get: () => activeDialog,
+        set: (dialog: ActiveDialogController | undefined) => {
+          activeDialog = dialog;
+        },
+      },
+      { get: () => undefined, set: vi.fn() },
+      { get: () => false, set: vi.fn() },
+      vi.fn(),
+    );
+
+    await Promise.resolve();
+    activeDialog?.hide();
+
+    expect(api.ui.toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "mini hidden. Press alt+n to show it.",
+      }),
+    );
+
+    agentResolution.resolve({
+      mode: "plugin-managed",
+      requestedAgent: null,
+      agent: null,
+      allowedTools: ["read"],
+      permission: [],
+      permissionSource: "plugin-managed",
+      notices: [],
+    });
+
+    await opening;
+  });
+
+  it("closes and shows an error if agent resolution fails", async () => {
+    const api = fakeApi();
+    let activeDialog: ActiveDialogController | undefined;
+
+    resolveRuntimeMiniAgent.mockRejectedValue(new Error("agent lookup failed"));
+
+    const opening = startQuestion(
+      api,
+      config(),
+      "main",
+      "session-1",
+      vi.fn(),
+      {
+        get: () => activeDialog,
+        set: (dialog: ActiveDialogController | undefined) => {
+          activeDialog = dialog;
+        },
+      },
+      { get: () => undefined, set: vi.fn() },
+      { get: () => false, set: vi.fn() },
+      vi.fn(),
+    );
+
+    await opening;
+
+    expect(activeDialog).toBeUndefined();
+    expect(api.ui.toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variant: "error",
+        message: "Failed to open mini session: agent lookup failed",
+      }),
+    );
   });
 });

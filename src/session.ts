@@ -387,7 +387,18 @@ export async function startQuestion(
   active.set(controller);
   renderOverlay({ focusInput: true });
 
-  resolvedAgent = await resolveRuntimeMiniAgent(api, config);
+  try {
+    resolvedAgent = await resolveRuntimeMiniAgent(api, config);
+  } catch (cause) {
+    if (closed) return;
+    api.ui.toast({
+      variant: "error",
+      message: `Failed to open mini session: ${getErrorMessage(cause)}`,
+    });
+    await cleanup();
+    return;
+  }
+
   if (closed) return;
   system = buildMiniSystemPrompt(context, resolvedAgent, mode);
   dialogState.notice = formatMiniNotice(
