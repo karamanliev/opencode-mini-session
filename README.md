@@ -121,6 +121,30 @@ Oldest messages are dropped to fit the `tokenLimit`, and the result is injected 
 
 Fresh mini mode skips this copied-context step entirely.
 
+## Footer counters
+
+The footer now shows two different context counters:
+
+1. Copied context, the main-session context injected when `/mini` opens
+2. Mini-session context, the exact `tokens.input` value reported by the SDK after each completed mini-session response
+
+Behavior differs by mode:
+
+- `/mini` opens with only the copied-context counter, shown as `used / tokenLimit`
+- `/mini-fresh` opens with no counter
+- After the first completed response, `/mini` shows `mini-session (percent) | copied-context / tokenLimit`
+- After the first completed response, `/mini-fresh` shows only the mini-session counter
+
+When the selected model has a known context window:
+
+- Mini-session context warns above 85 percent
+- The input placeholder changes near 95 percent to warn that the session context limit has been reached
+- The plugin does not block input, it only warns
+
+When the selected model context window is unavailable, the footer shows absolute token counts only, with no percentages or threshold-based warnings.
+
+If copied context reaches the configured `tokenLimit` cap, the limit value in the footer is highlighted.
+
 ## Troubleshooting
 
 ### Force update from older versions
