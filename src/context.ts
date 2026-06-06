@@ -13,6 +13,10 @@ export function getSessionEntries(
 }
 
 export function formatFullContext(entries: SessionEntry[], tokenLimit: number) {
+  return buildCopiedContext(entries, tokenLimit).text;
+}
+
+export function buildCopiedContext(entries: SessionEntry[], tokenLimit: number) {
   const selected: string[] = [];
   let usedTokens = 0;
 
@@ -29,8 +33,17 @@ export function formatFullContext(entries: SessionEntry[], tokenLimit: number) {
     if (usedTokens >= tokenLimit) break;
   }
 
-  if (selected.length === 0) return "No conversation context available.";
-  return selected.reverse().join("\n\n");
+  if (selected.length === 0) {
+    return {
+      text: "No conversation context available.",
+      usedTokens: 0,
+    };
+  }
+
+  return {
+    text: selected.reverse().join("\n\n"),
+    usedTokens,
+  };
 }
 
 function formatEntry(entry: SessionEntry) {
