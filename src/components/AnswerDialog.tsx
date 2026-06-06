@@ -16,7 +16,6 @@ import type {
 } from "../types";
 import { extractAssistantText } from "../session";
 import { ActionButton } from "./ActionButton";
-import { HintBar, type HintBarItem } from "./HintBar";
 
 function buildSyntaxStyle(
   theme: TuiPluginApi["theme"]["current"],
@@ -90,12 +89,12 @@ export function AnswerDialog(props: AnswerDialogProps) {
   const screenHeight = props.api.renderer.height;
   const panelWidth = Math.min(100, Math.floor(screenWidth * 0.85));
   const panelHeight = Math.max(
-    12,
+    14,
     Math.min(screenHeight - 6, Math.floor(screenHeight * 0.68)),
   );
   const transcriptWidth = Math.max(20, panelWidth - 6);
-  const compactFooter = transcriptWidth < 70;
-  const transcriptHeight = Math.max(1, panelHeight - (compactFooter ? 13 : 11));
+  const promptContentWidth = Math.max(10, transcriptWidth - 6);
+  const transcriptHeight = Math.max(1, panelHeight - 13);
   const transcriptContentWidth = Math.max(20, transcriptWidth - 5);
 
   const messages = createMemo(() => buildMiniMessages(props.state));
@@ -129,23 +128,15 @@ export function AnswerDialog(props: AnswerDialogProps) {
   const hasFooterCounter = createMemo(
     () => Boolean(footerCounter().miniSession || footerCounter().copiedContext),
   );
-  const hintItems = createMemo<HintBarItem[]>(() =>
-    canContinue()
-      ? [
-          { keybind: "enter", label: "send" },
-          { keybind: "shift+enter", label: "continue" },
-          { keybind: "esc", label: "close" },
-        ]
-      : [
-          { keybind: "enter", label: "send" },
-          { keybind: "tab", label: "model" },
-          { keybind: "esc", label: "close" },
-        ],
-  );
   const footerModelName = createMemo(() =>
     truncateWithEllipsis(
       props.modelName,
-      Math.max(0, transcriptWidth - getHintBarWidth(hintItems()) - 3),
+      Math.max(
+        0,
+        promptContentWidth -
+          getFooterCounterWidth(footerCounter()) -
+          (hasFooterCounter() ? 3 : 0),
+      ),
     ),
   );
 
@@ -292,90 +283,96 @@ export function AnswerDialog(props: AnswerDialogProps) {
           paddingLeft={3}
           paddingRight={3}
           paddingBottom={1}
-          paddingTop={1}
           flexDirection="column"
           gap={1}
           marginTop={1}
-          backgroundColor={theme.borderSubtle}
         >
-          <input
-            ref={(node) => {
-              input = node;
-              props.onInput?.(node);
-            }}
-            width={transcriptWidth}
-            placeholder={
-              props.state.inputPlaceholder ??
-              (props.state.loading
-                ? "Waiting for response..."
-                : "Ask a question...")
-            }
-            textColor={theme.text}
-            placeholderColor={theme.textMuted}
-            backgroundColor={theme.backgroundPanel}
-            focusedTextColor={theme.text}
-            cursorColor={theme.primary}
-            focusedBackgroundColor={theme.backgroundPanel}
-            onInput={(value) => {
-              inputValue = value;
-            }}
-            onSubmit={() => {
-              const submitted = (input?.value || inputValue).trim();
-              if (!submitted || props.state.loading) return;
-              if (!props.onSubmit(submitted)) return;
-              inputValue = "";
-              if (input) input.value = "";
-            }}
-          />
           <box
-            flexDirection="row"
-            justifyContent="space-between"
-            alignItems="center"
             width={transcriptWidth}
-            gap={3}
+            height={6}
+            backgroundColor={theme.borderSubtle}
+            flexDirection="column"
+            paddingTop={1}
+            paddingLeft={2}
+            paddingRight={2}
+            paddingBottom={1}
+            justifyContent="space-between"
           >
-            <box flexDirection="row" gap={2}>
-              <Show when={canContinue()}>
-                <ActionButton
-                  api={props.api}
-                  label="Continue"
-                  onPress={props.onContinue}
-                />
+            <input
+              ref={(node) => {
+                input = node;
+                props.onInput?.(node);
+              }}
+              width={promptContentWidth}
+              placeholder={
+                props.state.inputPlaceholder ??
+                (props.state.loading
+                  ? "Waiting for response..."
+                  : "Ask a question...")
+              }
+              textColor={theme.text}
+              placeholderColor={theme.textMuted}
+              backgroundColor={theme.borderSubtle}
+              focusedTextColor={theme.text}
+              cursorColor={theme.primary}
+              focusedBackgroundColor={theme.borderSubtle}
+              onInput={(value) => {
+                inputValue = value;
+              }}
+              onSubmit={() => {
+                const submitted = (input?.value || inputValue).trim();
+                if (!submitted || props.state.loading) return;
+                if (!props.onSubmit(submitted)) return;
+                inputValue = "";
+                if (input) input.value = "";
+              }}
+            />
+            <box
+              flexDirection="row"
+              justifyContent="space-between"
+              alignItems="center"
+              width={promptContentWidth}
+              gap={3}
+            >
+              <text fg={theme.text}>{footerModelName()}</text>
+              <Show when={hasFooterCounter()}>
+                <FooterCounter api={props.api} state={footerCounter()} />
               </Show>
-              <ActionButton
-                api={props.api}
-                label="Hide"
-                onPress={props.onHide}
-              />
-              <ActionButton
-                api={props.api}
-                label="Think"
-                onPress={props.onToggleThinking}
-              />
-              <ActionButton
-                api={props.api}
-                label="Model"
-                onPress={props.onChangeModel}
-              />
             </box>
-            <Show when={!compactFooter && hasFooterCounter()}>
-              <FooterCounter api={props.api} state={footerCounter()} />
-            </Show>
           </box>
-          <Show when={compactFooter && hasFooterCounter()}>
-            <box flexDirection="row" justifyContent="flex-end" width={transcriptWidth}>
-              <FooterCounter api={props.api} state={footerCounter()} />
-            </box>
-          </Show>
           <box
             flexDirection="row"
-            justifyContent="space-between"
+            justifyContent="flex-end"
             alignItems="center"
             width={transcriptWidth}
-            gap={3}
+            gap={2}
           >
-            <text fg={theme.textMuted}>{footerModelName()}</text>
-            <HintBar api={props.api} items={hintItems()} />
+            <Show when={canContinue()}>
+              <ActionButton
+                api={props.api}
+                label="Continue"
+                keybind="shift+enter"
+                onPress={props.onContinue}
+              />
+            </Show>
+            <ActionButton
+              api={props.api}
+              label="Toggle"
+              keybind={props.hideKey || undefined}
+              onPress={props.onHide}
+            />
+            <ActionButton
+              api={props.api}
+              label="Thinking"
+              keybind={props.toggleThinkingKeybind || undefined}
+              onPress={props.onToggleThinking}
+            />
+            <ActionButton
+              api={props.api}
+              label="Model"
+              keybind="tab"
+              onPress={props.onChangeModel}
+            />
           </box>
         </box>
       </box>
@@ -718,15 +715,11 @@ function truncateWithEllipsis(text: string, maxWidth: number) {
   return `${text.slice(0, maxWidth - 3)}...`;
 }
 
-function getHintBarWidth(items: HintBarItem[]) {
-  if (items.length === 0) return 0;
-  return (
-    items.reduce(
-      (total, item) => total + (item.keybind ? item.keybind.length : 0) + item.label.length + 1,
-      0,
-    ) +
-    (items.length - 1) * 2
-  );
+function getFooterCounterWidth(state: AnswerDialogState["footerCounter"]) {
+  const miniWidth = state.miniSession?.text.length ?? 0;
+  const copiedWidth = state.copiedContext?.text.length ?? 0;
+  if (miniWidth && copiedWidth) return miniWidth + copiedWidth + 3;
+  return miniWidth + copiedWidth;
 }
 
 function getReasoningPartID(part: Extract<Part, { type: "reasoning" }>) {
