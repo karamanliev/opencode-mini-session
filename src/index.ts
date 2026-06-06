@@ -14,7 +14,7 @@ import {
   CMD_SCROLL_DOWN,
   CMD_SCROLL_TOP,
   CMD_SCROLL_UP,
-  DEFAULT_KEYBIND,
+  CMD_TOGGLE_THINKING,
   PLUGIN_ID,
   SCROLL_LINE_DELTA,
   SCROLL_PAGE_DELTA,
@@ -24,12 +24,13 @@ import type {
   ActiveDialogController,
   ModelPreference,
   OverlayState,
+  ThinkingPreferenceState,
 } from "./types";
 import { startAutoUpdate } from "./update";
 
 const tui: TuiPlugin = async (api, options, meta) => {
   const config = parseConfig(options);
-  const keybind = config.keybind || DEFAULT_KEYBIND;
+  const keybind = config.keybind;
   const [overlay, setOverlay] = createSignal<OverlayState | undefined>(
     undefined,
     { equals: false },
@@ -38,10 +39,17 @@ const tui: TuiPlugin = async (api, options, meta) => {
     undefined,
     { equals: false },
   );
+  const [thinkingEnabled, setThinkingEnabled] = createSignal(
+    config.enableThinking,
+  );
   const [originSessionID, setOriginSessionID] = createSignal<string | undefined>(undefined);
   const [updateWarning, setUpdateWarning] = createSignal<string | undefined>(undefined);
   let activeDialog: ActiveDialogController | undefined;
   let modelPickerOpen = false;
+  const thinkingPreference: ThinkingPreferenceState = {
+    get: thinkingEnabled,
+    set: setThinkingEnabled,
+  };
 
   api.lifecycle.onDispose(() => activeDialog?.close());
   startAutoUpdate(api, meta, setUpdateWarning);
@@ -89,6 +97,7 @@ const tui: TuiPlugin = async (api, options, meta) => {
         },
       },
       { name: CMD_CONTINUE, run: () => overlay()?.onContinue() },
+      { name: CMD_TOGGLE_THINKING, run: () => overlay()?.onToggleThinking() },
       {
         name: CMD_CHANGE_MODEL,
         run: () => {
@@ -107,7 +116,10 @@ const tui: TuiPlugin = async (api, options, meta) => {
       },
     ],
     bindings: [
-      { key: keybind, cmd: CMD_HIDE },
+      ...(keybind ? [{ key: keybind, cmd: CMD_HIDE }] : []),
+      ...(config.toggleThinkingKeybind
+        ? [{ key: config.toggleThinkingKeybind, cmd: CMD_TOGGLE_THINKING }]
+        : []),
       { key: "shift+enter", cmd: CMD_CONTINUE },
       { key: "tab", cmd: CMD_CHANGE_MODEL },
       { key: "escape", cmd: CMD_CLOSE },
@@ -141,7 +153,7 @@ const tui: TuiPlugin = async (api, options, meta) => {
           }, {
             get: selectedModel,
             set: setSelectedModel,
-          }, (onAfterSelect) => openModelPicker(api, config, sessionID, { get: selectedModel, set: setSelectedModel }, () => {
+          }, thinkingPreference, (onAfterSelect) => openModelPicker(api, config, sessionID, { get: selectedModel, set: setSelectedModel }, () => {
               modelPickerOpen = false;
               onAfterSelect();
             }), updateWarning);
@@ -166,7 +178,9 @@ const tui: TuiPlugin = async (api, options, meta) => {
         },
       },
     ],
-    bindings: [{ key: keybind, cmd: CMD_OPEN, desc: "Open a mini session" }],
+    bindings: keybind
+      ? [{ key: keybind, cmd: CMD_OPEN, desc: "Open a mini session" }]
+      : [],
   });
 };
 

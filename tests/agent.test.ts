@@ -16,6 +16,8 @@ function config(overrides: Partial<MiniConfig> = {}): MiniConfig {
     agent: null,
     tokenLimit: 50_000,
     keybind: "alt+b",
+    enableThinking: false,
+    toggleThinkingKeybind: "ctrl+t",
     allowedTools: null,
     allowedToolsProvided: false,
     ...overrides,
@@ -63,6 +65,32 @@ describe("config parsing", () => {
     expect(parseConfig({ allowedTools: ["read"] }).allowedToolsProvided).toBe(
       true,
     );
+  });
+
+  it("parses thinking config defaults and explicit values", () => {
+    expect(parseConfig({}).enableThinking).toBe(false);
+    expect(parseConfig({ enableThinking: false }).enableThinking).toBe(false);
+    expect(parseConfig({ enableThinking: true }).enableThinking).toBe(true);
+    expect(parseConfig({ enableThinking: "false" }).enableThinking).toBe(false);
+  });
+
+  it("parses thinking keybind values", () => {
+    expect(parseConfig({}).toggleThinkingKeybind).toBe("ctrl+t");
+    expect(
+      parseConfig({ toggleThinkingKeybind: " ctrl+r " })
+        .toggleThinkingKeybind,
+    ).toBe("ctrl+r");
+    expect(
+      parseConfig({ toggleThinkingKeybind: false }).toggleThinkingKeybind,
+    ).toBe(false);
+    expect(
+      parseConfig({ toggleThinkingKeybind: "none" }).toggleThinkingKeybind,
+    ).toBe(false);
+  });
+
+  it("disables the main keybind with false or none", () => {
+    expect(parseConfig({ keybind: false }).keybind).toBe(false);
+    expect(parseConfig({ keybind: "none" }).keybind).toBe(false);
   });
 });
 

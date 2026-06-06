@@ -7,6 +7,8 @@ export type MiniConfig = {
   agent: string | null;
   tokenLimit: number;
   keybind: string | false;
+  enableThinking: boolean;
+  toggleThinkingKeybind: string | false;
   allowedTools: string[] | null;
   allowedToolsProvided: boolean;
 };
@@ -31,6 +33,11 @@ export type ModelPreferenceState = {
   set: (model: ModelPreference) => void;
 };
 
+export type ThinkingPreferenceState = {
+  get: () => boolean;
+  set: (enabled: boolean) => void;
+};
+
 export type ActiveDialog = {
   get: () => ActiveDialogController | undefined;
   set: (dialog: ActiveDialogController | undefined) => void;
@@ -48,6 +55,9 @@ export type AnswerDialogState = {
   streamingAnswer: string;
   loading: boolean;
   scrollbarVisible: boolean;
+  spinnerFrame: number;
+  thinkingEnabled: boolean;
+  expandedThinkingPartIDs: Record<string, true>;
   notice?: string;
   update?: string;
   error?: string;
@@ -60,7 +70,8 @@ export type AnswerDialogProps = {
   title: string;
   version?: string;
   modelName: string;
-  hideKey: string;
+  hideKey: string | false;
+  toggleThinkingKeybind: string | false;
   state: AnswerDialogState;
   onScroller?: (scroller: ScrollBoxRenderable | undefined) => void;
   onInput?: (input: InputRenderable | undefined) => void;
@@ -68,6 +79,8 @@ export type AnswerDialogProps = {
   onClose: () => void;
   onContinue: () => void;
   onChangeModel: () => void;
+  onToggleThinking: () => void;
+  onToggleThinkingPart: (partID: string) => void;
   onSubmit: (value: string) => boolean;
 };
 

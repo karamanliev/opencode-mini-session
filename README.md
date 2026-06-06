@@ -32,6 +32,7 @@ Press `alt+b` (or run `/mini` from the command palette) during any OpenCode sess
 | `enter` | Send question / follow-up |
 | `shift+enter` | Inject mini transcript into the main thread |
 | `alt+b` (configurable) | Hide overlay (resumable) |
+| `ctrl+t` (configurable) | Toggle thinking blocks |
 | `tab` | Change the model for the next question |
 | `esc` / `ctrl+c` | Cancel and close |
 
@@ -59,6 +60,8 @@ All options are optional. Defaults are shown below.
 | `agent` | `string \| null` | `null` | `null` or omitted uses plugin-managed mini mode. A string uses an existing OpenCode agent by name. |
 | `tokenLimit` | `number` | `50000` | Maximum tokens of session context to include. |
 | `keybind` | `string \| false` | `"alt+b"` | Global keybind. Set to `false` or `"none"` to disable. |
+| `enableThinking` | `boolean` | `false` | Show thinking blocks collapsed by default. |
+| `toggleThinkingKeybind` | `string \| false` | `"ctrl+t"` | Thinking toggle keybind inside the mini session. Set to `false` or `"none"` to disable. |
 | ~`allowedTools`~ | `string[] \| null` | `null` | Deprecated. Use custom OpenCode agents for custom permissions. |
 
 If you want to customize the plugin, your config should look something like this:
@@ -70,6 +73,8 @@ If you want to customize the plugin, your config should look something like this
       "model": "anthropic/claude-sonnet-4.6",
       "tokenLimit": 10000,
       "keybind": "alt+m",
+      "enableThinking": false,
+      "toggleThinkingKeybind": "ctrl+t",
       "agent": "build",
       ...
     }]

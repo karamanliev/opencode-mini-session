@@ -48,7 +48,13 @@ function buildSyntaxStyle(
 
 type MiniPart =
   | { type: "text"; text: string }
-  | { type: "reasoning"; text: string }
+  | {
+      type: "reasoning";
+      id: string;
+      text: string;
+      time?: { start?: number; end?: number };
+      metadata?: unknown;
+    }
   | { type: "tool"; text: string; status: string }
   | { type: "meta"; text: string };
 
@@ -58,6 +64,19 @@ type MiniMessage = {
   parts: MiniPart[];
   modelName?: string;
 };
+
+const THINKING_SPINNER_FRAMES = [
+  "⠋",
+  "⠙",
+  "⠹",
+  "⠸",
+  "⠼",
+  "⠴",
+  "⠦",
+  "⠧",
+  "⠇",
+  "⠏",
+];
 
 export function AnswerDialog(props: AnswerDialogProps) {
   const theme = props.api.theme.current;
@@ -103,6 +122,14 @@ export function AnswerDialog(props: AnswerDialogProps) {
   );
   const createUserMessageHint = createMemo(() =>
     getCreateUserMessageHint(props.state),
+  );
+  const footerModelName = createMemo(() =>
+    formatFooterModelName(props.modelName, {
+      width: transcriptWidth,
+      canContinue: canContinue(),
+      hideKey: props.hideKey,
+      toggleThinkingKeybind: props.toggleThinkingKeybind,
+    }),
   );
 
   return (
@@ -188,9 +215,24 @@ export function AnswerDialog(props: AnswerDialogProps) {
                     </text>
                     {message.parts.map((part, index) => (
                       <box
-                        marginTop={getMiniPartTopMargin(message.parts, index)}
+                        marginTop={getMiniPartTopMargin(
+                          message.parts,
+                          index,
+                          message.role,
+                        )}
                       >
-                        {message.role === "assistant" &&
+                        {part.type === "reasoning" ? (
+                          <ThinkingPart
+                            api={props.api}
+                            part={part}
+                            expanded={isThinkingPartExpanded(
+                              props.state,
+                              part,
+                            )}
+                            spinnerFrame={props.state.spinnerFrame}
+                            onToggle={() => props.onToggleThinkingPart(part.id)}
+                          />
+                        ) : message.role === "assistant" &&
                         part.type === "text" &&
                         !props.state.loading ? (
                           <markdown
@@ -270,12 +312,13 @@ export function AnswerDialog(props: AnswerDialogProps) {
               if (input) input.value = "";
             }}
           />
-          <box
-            flexDirection="row"
-            justifyContent="space-between"
-            alignItems="center"
-            width={transcriptWidth}
-          >
+            <box
+              flexDirection="row"
+              justifyContent="space-between"
+              alignItems="center"
+              width={transcriptWidth}
+              gap={3}
+            >
             <box flexDirection="row" gap={2}>
               <Show when={canContinue()}>
                 <ActionButton
@@ -288,8 +331,14 @@ export function AnswerDialog(props: AnswerDialogProps) {
               <ActionButton
                 api={props.api}
                 label="Toggle"
-                keybind={props.hideKey}
+                keybind={props.hideKey || undefined}
                 onPress={props.onHide}
+              />
+              <ActionButton
+                api={props.api}
+                label="Thinking"
+                keybind={props.toggleThinkingKeybind || undefined}
+                onPress={props.onToggleThinking}
               />
               <ActionButton
                 api={props.api}
@@ -298,7 +347,7 @@ export function AnswerDialog(props: AnswerDialogProps) {
                 onPress={props.onChangeModel}
               />
             </box>
-            <text fg={theme.textMuted}>{props.modelName}</text>
+            <text fg={theme.textMuted}>{footerModelName()}</text>
           </box>
         </box>
       </box>
@@ -307,19 +356,32 @@ export function AnswerDialog(props: AnswerDialogProps) {
 }
 
 function buildMiniMessages(state: AnswerDialogState): MiniMessage[] {
-  const messages = state.entries
-    .map((entry) => ({
+  const messages: MiniMessage[] = [];
+
+  for (const entry of state.entries) {
+    const message: MiniMessage = {
       id: entry.info.id,
       role: entry.info.role,
       parts: entry.parts
-        .map(toMiniPart)
+        .flatMap(toMiniParts)
         .filter((part): part is MiniPart => Boolean(part)),
       modelName:
         entry.info.role === "assistant"
           ? state.messageModels[entry.info.id]
           : undefined,
-    }))
-    .filter((message) => message.parts.length > 0);
+    };
+
+    if (message.parts.length === 0) continue;
+
+    const previous = messages[messages.length - 1];
+    if (shouldMergeMiniMessages(previous, message)) {
+      previous.parts.push(...message.parts);
+      previous.modelName ??= message.modelName;
+      continue;
+    }
+
+    messages.push(message);
+  }
 
   if (!state.streamingAnswer) return messages;
 
@@ -376,6 +438,47 @@ function buildMiniMessages(state: AnswerDialogState): MiniMessage[] {
   return messages;
 }
 
+function shouldMergeMiniMessages(
+  previous: MiniMessage | undefined,
+  current: MiniMessage,
+) {
+  return Boolean(
+    previous && previous.role === "assistant" && current.role === "assistant",
+  );
+}
+
+type ThinkingMiniPart = Extract<MiniPart, { type: "reasoning" }>;
+
+function ThinkingPart(props: {
+  api: TuiPluginApi;
+  part: ThinkingMiniPart;
+  expanded: boolean;
+  spinnerFrame: number;
+  onToggle: () => void;
+}) {
+  const theme = props.api.theme.current;
+  const header = () =>
+    formatThinkingHeader(props.part, props.expanded, props);
+  const body = () => getThinkingBodyText(props.part);
+
+  return (
+    <box flexDirection="column" gap={0} opacity={props.expanded ? 0.65 : 1}>
+      <box onMouseUp={props.onToggle}>
+        <text fg={theme.warning}>
+          <Show when={!props.expanded} fallback={header()}>
+            <b>{header()}</b>
+          </Show>
+        </text>
+      </box>
+      <Show when={props.expanded && body()}>
+        <box marginLeft={2} marginTop={1}>
+          <text fg={theme.markdownBlockQuote}>{body()}</text>
+        </box>
+      </Show>
+    </box>
+  );
+}
+
 function estimateMiniMessagesHeight(
   messages: MiniMessage[],
   state: AnswerDialogState,
@@ -384,8 +487,22 @@ function estimateMiniMessagesHeight(
   let lines = 0;
   for (const message of messages) {
     lines += 1;
-    for (const part of message.parts) {
-      lines += estimateWrappedLines(formatMiniPart(part), width);
+    for (let index = 0; index < message.parts.length; index++) {
+      const part = message.parts[index];
+      lines += getMiniPartTopMargin(message.parts, index, message.role);
+      if (part.type === "reasoning") {
+        lines += estimateWrappedLines(
+          formatThinkingHeader(part, isThinkingPartExpanded(state, part), state),
+          width,
+        );
+        if (isThinkingPartExpanded(state, part)) {
+          const body = getThinkingBodyText(part);
+          if (body)
+            lines += 1 + estimateWrappedLines(body, Math.max(1, width - 2));
+        }
+      } else {
+        lines += estimateWrappedLines(formatMiniPart(part), width);
+      }
     }
     lines += 1;
   }
@@ -412,18 +529,34 @@ function estimateWrappedLines(text: string, width: number) {
     );
 }
 
-function getMiniPartTopMargin(parts: MiniPart[], index: number) {
-  if (index === 0) return 0;
+function getMiniPartTopMargin(
+  parts: MiniPart[],
+  index: number,
+  role: MiniMessage["role"],
+) {
+  if (index === 0) return parts[0]?.type === "reasoning" && role === "assistant" ? 1 : 0;
   const previous = parts[index - 1];
   const current = parts[index];
+  if (current.type === "reasoning") {
+    return previous.type === "tool" || previous.type === "reasoning" ? 1 : 0;
+  }
+  if (current.type === "tool") {
+    return previous.type === "tool" || previous.type === "reasoning" ? 1 : 0;
+  }
   return current.type === "text" && previous.type !== "text" ? 1 : 0;
+}
+
+function toMiniParts(part: Part): MiniPart[] {
+  if (part.type === "reasoning" && part.text.trim())
+    return toReasoningMiniParts(part);
+
+  const miniPart = toMiniPart(part);
+  return miniPart ? [miniPart] : [];
 }
 
 function toMiniPart(part: Part): MiniPart | undefined {
   if (part.type === "text" && part.text.trim())
     return { type: "text", text: part.text.trim() };
-  if (part.type === "reasoning" && part.text.trim())
-    return { type: "reasoning", text: part.text.trim() };
   if (part.type === "tool") {
     const toolName = part.tool.charAt(0).toUpperCase() + part.tool.slice(1);
     const inputSummary = summarizeToolInput(part.state.input);
@@ -449,6 +582,53 @@ function toMiniPart(part: Part): MiniPart | undefined {
   return undefined;
 }
 
+function toReasoningMiniParts(part: Extract<Part, { type: "reasoning" }>) {
+  const baseID = getReasoningPartID(part);
+  const time = "time" in part && isReasoningTime(part.time) ? part.time : undefined;
+  const metadata = "metadata" in part ? part.metadata : undefined;
+  const segments = splitReasoningText(part.text.trim());
+
+  return segments.map((text, index) => ({
+    type: "reasoning" as const,
+    id: segments.length === 1 ? baseID : `${baseID}:${index}`,
+    text,
+    time: index === 0 ? time : undefined,
+    metadata,
+  }));
+}
+
+function splitReasoningText(text: string) {
+  const titlePattern = /\*\*([^*\n]+)\*\*/g;
+  const matches = [...text.matchAll(titlePattern)].filter((match) =>
+    isReasoningTitleMatch(text, match.index ?? -1),
+  );
+
+  if (matches.length <= 1) return [text];
+
+  const segments: string[] = [];
+  if ((matches[0].index ?? 0) > 0) {
+    const intro = text.slice(0, matches[0].index).trim();
+    if (intro) segments.push(intro);
+  }
+
+  for (let index = 0; index < matches.length; index++) {
+    const start = matches[index].index ?? 0;
+    const end = matches[index + 1]?.index ?? text.length;
+    const segment = text.slice(start, end).trim();
+    if (segment) segments.push(segment);
+  }
+
+  return segments.length > 0 ? segments : [text];
+}
+
+function isReasoningTitleMatch(text: string, index: number) {
+  if (index < 0) return false;
+  if (index === 0) return true;
+  const before = text.slice(0, index).trimEnd();
+  if (!before) return true;
+  return /[.!?)]$/.test(before) || before.endsWith("...");
+}
+
 function summarizeToolInput(
   input: { [key: string]: unknown } | undefined,
 ): string {
@@ -464,8 +644,139 @@ function summarizeToolInput(
 }
 
 function formatMiniPart(part: MiniPart) {
-  if (part.type === "reasoning") return `thinking: ${part.text}`;
   return part.text;
+}
+
+function formatFooterModelName(
+  modelName: string,
+  options: {
+    width: number;
+    canContinue: boolean;
+    hideKey: string | false;
+    toggleThinkingKeybind: string | false;
+  },
+) {
+  const actionWidth = getFooterActionsWidth(options);
+  const maxWidth = Math.max(0, options.width - actionWidth - 4);
+  return truncateWithEllipsis(modelName, maxWidth);
+}
+
+function getFooterActionsWidth(options: {
+  canContinue: boolean;
+  hideKey: string | false;
+  toggleThinkingKeybind: string | false;
+}) {
+  const actions = [
+    options.canContinue
+      ? getActionButtonWidth("Continue", "shift+enter")
+      : 0,
+    getActionButtonWidth("Toggle", options.hideKey),
+    getActionButtonWidth("Thinking", options.toggleThinkingKeybind),
+    getActionButtonWidth("Model", "tab"),
+  ].filter((width) => width > 0);
+
+  if (actions.length === 0) return 0;
+  return actions.reduce((total, width) => total + width, 0) + (actions.length - 1) * 2;
+}
+
+function getActionButtonWidth(label: string, keybind?: string | false) {
+  return label.length + (keybind ? keybind.length + 1 : 0);
+}
+
+function truncateWithEllipsis(text: string, maxWidth: number) {
+  if (maxWidth <= 0) return "";
+  if (text.length <= maxWidth) return text;
+  if (maxWidth <= 3) return ".".repeat(maxWidth);
+  return `${text.slice(0, maxWidth - 3)}...`;
+}
+
+function getReasoningPartID(part: Extract<Part, { type: "reasoning" }>) {
+  return "id" in part && typeof part.id === "string" ? part.id : part.text;
+}
+
+function isReasoningTime(
+  value: unknown,
+): value is { start?: number; end?: number } {
+  return Boolean(value && typeof value === "object");
+}
+
+function isThinkingPartExpanded(
+  state: AnswerDialogState,
+  part: ThinkingMiniPart,
+) {
+  const toggled = Boolean(state.expandedThinkingPartIDs[part.id]);
+  return state.thinkingEnabled ? !toggled : toggled;
+}
+
+function formatThinkingHeader(
+  part: ThinkingMiniPart,
+  expanded: boolean,
+  spinnerSource: Pick<AnswerDialogState, "spinnerFrame">,
+) {
+  const title = getThinkingTitle(part);
+  const duration = formatThinkingDuration(part.time);
+  const prefix = isThinkingPartLoading(part)
+    ? `${THINKING_SPINNER_FRAMES[spinnerSource.spinnerFrame]} `
+    : expanded
+      ? "- "
+      : "+ ";
+  if (title) return `${prefix}Thought: ${title}${duration ? ` · ${duration}` : ""}`;
+  return `${prefix}Thought${duration ? `: ${duration}` : ""}`;
+}
+
+function isThinkingPartLoading(part: ThinkingMiniPart) {
+  if (!part.time) return false;
+  const start = Number(part.time.start);
+  const end = Number(part.time.end);
+  return Number.isFinite(start) && !Number.isFinite(end);
+}
+
+function getThinkingTitle(part: ThinkingMiniPart) {
+  return getExplicitThinkingTitle(part.text);
+}
+
+function getExplicitThinkingTitle(text: string) {
+  const line = text
+    .split("\n")
+    .find((candidate) => candidate.trim().length > 0)
+    ?.trim();
+  const match = line?.match(/^\*\*(.+?)\*\*/);
+  return match?.[1]?.trim() ? truncateThinkingTitle(match[1].trim()) : "";
+}
+
+function truncateThinkingTitle(title: string) {
+  return title.length > 80 ? `${title.slice(0, 77).trim()}...` : title;
+}
+
+function getThinkingBodyText(part: ThinkingMiniPart) {
+  const lines = part.text.split("\n");
+  const title = getThinkingTitle(part);
+  const titleIndex = lines.findIndex((line) => line.trim().length > 0);
+  if (titleIndex === -1) return "";
+
+  if (!title) return part.text;
+
+  lines[titleIndex] = lines[titleIndex].replace(/^\s*\*\*(.+?)\*\*/, "");
+
+  return lines
+    .slice(titleIndex)
+    .join("\n")
+    .replace(/^\s+/, "")
+    .trimEnd();
+}
+
+function formatThinkingDuration(time: ThinkingMiniPart["time"]) {
+  if (!time) return "";
+  const start = Number(time.start);
+  const end = Number(time.end);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start)
+    return "";
+  const diff = end - start;
+  const milliseconds =
+    start > 10_000_000_000 || end > 10_000_000_000 ? diff : diff * 1000;
+  if (milliseconds < 1000) return `${Math.round(milliseconds)}ms`;
+  const seconds = milliseconds / 1000;
+  return seconds < 10 ? `${seconds.toFixed(1)}s` : `${Math.round(seconds)}s`;
 }
 
 function getMiniPartColor(
@@ -498,6 +809,7 @@ export function createOverlaySlot(getOverlay: () => OverlayState | undefined) {
             version={current().version}
             modelName={current().modelName}
             hideKey={current().hideKey}
+            toggleThinkingKeybind={current().toggleThinkingKeybind}
             state={current().state}
             onScroller={current().onScroller}
             onInput={current().onInput}
@@ -505,6 +817,8 @@ export function createOverlaySlot(getOverlay: () => OverlayState | undefined) {
             onClose={current().onClose}
             onContinue={current().onContinue}
             onChangeModel={current().onChangeModel}
+            onToggleThinking={current().onToggleThinking}
+            onToggleThinkingPart={current().onToggleThinkingPart}
             onSubmit={current().onSubmit}
           />
         )}
