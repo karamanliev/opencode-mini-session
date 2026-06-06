@@ -356,8 +356,10 @@ export function AnswerDialog(props: AnswerDialogProps) {
 }
 
 function buildMiniMessages(state: AnswerDialogState): MiniMessage[] {
-  const messages = state.entries
-    .map((entry) => ({
+  const messages: MiniMessage[] = [];
+
+  for (const entry of state.entries) {
+    const message: MiniMessage = {
       id: entry.info.id,
       role: entry.info.role,
       parts: entry.parts
@@ -367,8 +369,19 @@ function buildMiniMessages(state: AnswerDialogState): MiniMessage[] {
         entry.info.role === "assistant"
           ? state.messageModels[entry.info.id]
           : undefined,
-    }))
-    .filter((message) => message.parts.length > 0);
+    };
+
+    if (message.parts.length === 0) continue;
+
+    const previous = messages[messages.length - 1];
+    if (shouldMergeMiniMessages(previous, message)) {
+      previous.parts.push(...message.parts);
+      previous.modelName ??= message.modelName;
+      continue;
+    }
+
+    messages.push(message);
+  }
 
   if (!state.streamingAnswer) return messages;
 
@@ -423,6 +436,15 @@ function buildMiniMessages(state: AnswerDialogState): MiniMessage[] {
   }
 
   return messages;
+}
+
+function shouldMergeMiniMessages(
+  previous: MiniMessage | undefined,
+  current: MiniMessage,
+) {
+  return Boolean(
+    previous && previous.role === "assistant" && current.role === "assistant",
+  );
 }
 
 type ThinkingMiniPart = Extract<MiniPart, { type: "reasoning" }>;
@@ -515,7 +537,12 @@ function getMiniPartTopMargin(
   if (index === 0) return parts[0]?.type === "reasoning" && role === "assistant" ? 1 : 0;
   const previous = parts[index - 1];
   const current = parts[index];
-  if (current.type === "reasoning" && previous.type === "reasoning") return 1;
+  if (current.type === "reasoning") {
+    return previous.type === "tool" || previous.type === "reasoning" ? 1 : 0;
+  }
+  if (current.type === "tool") {
+    return previous.type === "tool" || previous.type === "reasoning" ? 1 : 0;
+  }
   return current.type === "text" && previous.type !== "text" ? 1 : 0;
 }
 
