@@ -24,6 +24,7 @@ import type {
   ActiveDialog,
   AnswerDialogState,
   MiniConfig,
+  MiniMode,
   ModelPreferenceState,
   OverlayState,
   ResolvedModel,
@@ -47,6 +48,7 @@ type ErrorPath =
 export async function openMiniSession(
   api: TuiPluginApi,
   config: MiniConfig,
+  mode: MiniMode,
   setOverlay: Setter<OverlayState | undefined>,
   active: ActiveDialog,
   modelPreference: ModelPreferenceState,
@@ -74,6 +76,7 @@ export async function openMiniSession(
   void startQuestion(
     api,
     config,
+    mode,
     sessionID,
     setOverlay,
       active,
@@ -87,6 +90,7 @@ export async function openMiniSession(
 export async function startQuestion(
   api: TuiPluginApi,
   config: MiniConfig,
+  mode: MiniMode,
   sessionID: string,
   setOverlay: Setter<OverlayState | undefined>,
   active: ActiveDialog,
@@ -96,9 +100,10 @@ export async function startQuestion(
   getUpdateWarning?: () => string | undefined,
 ) {
   const entries = getSessionEntries(api, sessionID);
-  const context = formatFullContext(entries, config.tokenLimit);
+  const context =
+    mode === "main" ? formatFullContext(entries, config.tokenLimit) : "";
   const resolvedAgent = await resolveRuntimeMiniAgent(api, config);
-  const system = buildMiniSystemPrompt(context, resolvedAgent);
+  const system = buildMiniSystemPrompt(context, resolvedAgent, mode);
   const defaultResolvedModel = resolveDefaultModel(
     api.state.provider,
     config.model,
@@ -108,7 +113,9 @@ export async function startQuestion(
   const getResolvedModel = () =>
     modelPreference.get() ?? defaultResolvedModel.model;
   const getModelName = () => formatResolvedModel(getResolvedModel());
-  const hideKey = config.keybind;
+  const hideKey = mode === "fresh" ? config.freshKeybind : config.keybind;
+  const hiddenCommand = mode === "fresh" ? "/mini-fresh" : "/mini";
+  const title = mode === "fresh" ? "mini fresh" : "mini session";
   const previousFocus = api.renderer.currentFocusedRenderable;
 
   const dialogState: AnswerDialogState = {
@@ -219,7 +226,7 @@ export async function startQuestion(
       variant: "info",
       message: hideKey
         ? `mini hidden. Press ${hideKey} to show it.`
-        : "mini hidden. Run /mini to show it.",
+        : `mini hidden. Run ${hiddenCommand} to show it.`,
       duration: 1000,
     });
   };
@@ -316,7 +323,7 @@ export async function startQuestion(
     if (hidden) return;
     setOverlay({
       api,
-      title: "mini session",
+      title,
       version,
       modelName: getModelName(),
       hideKey,

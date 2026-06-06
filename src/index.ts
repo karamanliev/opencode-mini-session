@@ -8,6 +8,7 @@ import {
   CMD_CONTINUE,
   CMD_HIDE,
   CMD_OPEN,
+  CMD_OPEN_FRESH,
   CMD_PAGE_DOWN,
   CMD_PAGE_UP,
   CMD_SCROLL_BOTTOM,
@@ -15,13 +16,17 @@ import {
   CMD_SCROLL_TOP,
   CMD_SCROLL_UP,
   CMD_TOGGLE_THINKING,
+  CMD_TOGGLE_FRESH,
+  CMD_TOGGLE_MAIN,
   PLUGIN_ID,
   SCROLL_LINE_DELTA,
   SCROLL_PAGE_DELTA,
 } from "./constants";
 import { openMiniSession, openModelPicker } from "./session";
+import { resolveMiniRouteAction } from "./routing";
 import type {
   ActiveDialogController,
+  MiniMode,
   ModelPreference,
   OverlayState,
   ThinkingPreferenceState,
@@ -31,6 +36,7 @@ import { startAutoUpdate } from "./update";
 const tui: TuiPlugin = async (api, options, meta) => {
   const config = parseConfig(options);
   const keybind = config.keybind;
+  const freshKeybind = config.freshKeybind;
   const [overlay, setOverlay] = createSignal<OverlayState | undefined>(
     undefined,
     { equals: false },
@@ -45,6 +51,7 @@ const tui: TuiPlugin = async (api, options, meta) => {
   const [originSessionID, setOriginSessionID] = createSignal<string | undefined>(undefined);
   const [updateWarning, setUpdateWarning] = createSignal<string | undefined>(undefined);
   let activeDialog: ActiveDialogController | undefined;
+  let activeMode: MiniMode | undefined;
   let modelPickerOpen = false;
   const thinkingPreference: ThinkingPreferenceState = {
     get: thinkingEnabled,
@@ -116,7 +123,6 @@ const tui: TuiPlugin = async (api, options, meta) => {
       },
     ],
     bindings: [
-      ...(keybind ? [{ key: keybind, cmd: CMD_HIDE }] : []),
       ...(config.toggleThinkingKeybind
         ? [{ key: config.toggleThinkingKeybind, cmd: CMD_TOGGLE_THINKING }]
         : []),
@@ -132,6 +138,18 @@ const tui: TuiPlugin = async (api, options, meta) => {
   api.keymap.registerLayer({
     commands: [
       {
+        name: CMD_TOGGLE_MAIN,
+        run() {
+          void triggerMiniMode("main", "keybind");
+        },
+      },
+      {
+        name: CMD_TOGGLE_FRESH,
+        run() {
+          void triggerMiniMode("fresh", "keybind");
+        },
+      },
+      {
         namespace: "palette",
         name: CMD_OPEN,
         title: "mini",
@@ -140,23 +158,19 @@ const tui: TuiPlugin = async (api, options, meta) => {
         slashName: "mini",
         enabled: () => api.route.current.name === "session",
         run() {
-          const currentRoute = api.route.current;
-          if (currentRoute.name !== "session") return;
-          const { sessionID } = currentRoute.params as { sessionID: string };
-          if (!activeDialog) setOriginSessionID(sessionID);
-          void openMiniSession(api, config, setOverlay, {
-            get: () => activeDialog,
-            set: (dialog) => {
-              activeDialog = dialog;
-              if (!dialog) setOriginSessionID(undefined);
-            },
-          }, {
-            get: selectedModel,
-            set: setSelectedModel,
-          }, thinkingPreference, (onAfterSelect) => openModelPicker(api, config, sessionID, { get: selectedModel, set: setSelectedModel }, () => {
-              modelPickerOpen = false;
-              onAfterSelect();
-            }), updateWarning);
+          void triggerMiniMode("main", "command");
+        },
+      },
+      {
+        namespace: "palette",
+        name: CMD_OPEN_FRESH,
+        title: "mini fresh",
+        desc: "Open a mini session without copied context",
+        category: "Plugin",
+        slashName: "mini-fresh",
+        enabled: () => api.route.current.name === "session",
+        run() {
+          void triggerMiniMode("fresh", "command");
         },
       },
       {
@@ -178,10 +192,72 @@ const tui: TuiPlugin = async (api, options, meta) => {
         },
       },
     ],
-    bindings: keybind
-      ? [{ key: keybind, cmd: CMD_OPEN, desc: "Open a mini session" }]
-      : [],
+    bindings: [
+      ...(keybind
+        ? [
+            {
+              key: keybind,
+              cmd: CMD_TOGGLE_MAIN,
+              desc: "Toggle main mini session",
+            },
+          ]
+        : []),
+      ...(freshKeybind
+        ? [
+            {
+              key: freshKeybind,
+              cmd: CMD_TOGGLE_FRESH,
+              desc: "Toggle fresh mini session",
+            },
+          ]
+        : []),
+    ],
   });
+
+  async function triggerMiniMode(mode: MiniMode, source: "command" | "keybind") {
+    const currentRoute = api.route.current;
+    if (currentRoute.name !== "session") return;
+    const { sessionID } = currentRoute.params as { sessionID: string };
+    const nextAction = resolveMiniRouteAction({
+      source,
+      requestedMode: mode,
+      activeMode,
+      isVisible: activeDialog?.isVisible(),
+    });
+
+    if (nextAction === "hide") {
+      activeDialog?.hide();
+      return;
+    }
+
+    if (nextAction === "show") {
+      activeDialog?.show();
+      return;
+    }
+
+    if (nextAction === "switch") {
+      await activeDialog?.close();
+    }
+
+    setOriginSessionID(sessionID);
+    activeMode = mode;
+    void openMiniSession(api, config, mode, setOverlay, {
+      get: () => activeDialog,
+      set: (dialog) => {
+        activeDialog = dialog;
+        if (!dialog) {
+          activeMode = undefined;
+          setOriginSessionID(undefined);
+        }
+      },
+    }, {
+      get: selectedModel,
+      set: setSelectedModel,
+    }, thinkingPreference, (onAfterSelect) => openModelPicker(api, config, sessionID, { get: selectedModel, set: setSelectedModel }, () => {
+        modelPickerOpen = false;
+        onAfterSelect();
+      }), updateWarning);
+  }
 };
 
 const plugin: TuiPluginModule & { id: string } = {
