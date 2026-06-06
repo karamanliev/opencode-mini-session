@@ -93,8 +93,9 @@ export function AnswerDialog(props: AnswerDialogProps) {
     12,
     Math.min(screenHeight - 6, Math.floor(screenHeight * 0.68)),
   );
-  const transcriptHeight = Math.max(4, panelHeight - 13);
   const transcriptWidth = Math.max(20, panelWidth - 6);
+  const compactFooter = transcriptWidth < 70;
+  const transcriptHeight = Math.max(1, panelHeight - (compactFooter ? 13 : 11));
   const transcriptContentWidth = Math.max(20, transcriptWidth - 5);
 
   const messages = createMemo(() => buildMiniMessages(props.state));
@@ -125,16 +126,27 @@ export function AnswerDialog(props: AnswerDialogProps) {
     getCreateUserMessageHint(props.state),
   );
   const footerCounter = createMemo(() => props.state.footerCounter);
-  const hintItems = createMemo<HintBarItem[]>(() => [
-    { keybind: "enter", label: "send" },
-    { keybind: canContinue() ? "shift+enter" : false, label: "continue" },
-    { keybind: "tab", label: "model" },
-    { keybind: props.toggleThinkingKeybind, label: "thinking" },
-    { keybind: props.hideKey, label: "hide" },
-    { keybind: "esc", label: "close" },
-  ]);
+  const hasFooterCounter = createMemo(
+    () => Boolean(footerCounter().miniSession || footerCounter().copiedContext),
+  );
+  const hintItems = createMemo<HintBarItem[]>(() =>
+    canContinue()
+      ? [
+          { keybind: "enter", label: "send" },
+          { keybind: "shift+enter", label: "continue" },
+          { keybind: "esc", label: "close" },
+        ]
+      : [
+          { keybind: "enter", label: "send" },
+          { keybind: "tab", label: "model" },
+          { keybind: "esc", label: "close" },
+        ],
+  );
   const footerModelName = createMemo(() =>
-    truncateWithEllipsis(props.modelName, Math.max(12, Math.floor(transcriptWidth * 0.42))),
+    truncateWithEllipsis(
+      props.modelName,
+      Math.max(0, transcriptWidth - getHintBarWidth(hintItems()) - 3),
+    ),
   );
 
   return (
@@ -286,40 +298,6 @@ export function AnswerDialog(props: AnswerDialogProps) {
           marginTop={1}
           backgroundColor={theme.borderSubtle}
         >
-          <box
-            flexDirection="row"
-            justifyContent="flex-start"
-            alignItems="center"
-            width={transcriptWidth}
-            gap={2}
-          >
-            <Show when={canContinue()}>
-              <ActionButton
-                api={props.api}
-                label="Continue"
-                keybind="shift+enter"
-                onPress={props.onContinue}
-              />
-            </Show>
-            <ActionButton
-              api={props.api}
-              label="Toggle"
-              keybind={props.hideKey || undefined}
-              onPress={props.onHide}
-            />
-            <ActionButton
-              api={props.api}
-              label="Thinking"
-              keybind={props.toggleThinkingKeybind || undefined}
-              onPress={props.onToggleThinking}
-            />
-            <ActionButton
-              api={props.api}
-              label="Model"
-              keybind="tab"
-              onPress={props.onChangeModel}
-            />
-          </box>
           <input
             ref={(node) => {
               input = node;
@@ -356,10 +334,49 @@ export function AnswerDialog(props: AnswerDialogProps) {
             width={transcriptWidth}
             gap={3}
           >
-            <text fg={theme.textMuted}>{footerModelName()}</text>
-            <FooterCounter api={props.api} state={footerCounter()} />
+            <box flexDirection="row" gap={2}>
+              <Show when={canContinue()}>
+                <ActionButton
+                  api={props.api}
+                  label="Continue"
+                  onPress={props.onContinue}
+                />
+              </Show>
+              <ActionButton
+                api={props.api}
+                label="Hide"
+                onPress={props.onHide}
+              />
+              <ActionButton
+                api={props.api}
+                label="Think"
+                onPress={props.onToggleThinking}
+              />
+              <ActionButton
+                api={props.api}
+                label="Model"
+                onPress={props.onChangeModel}
+              />
+            </box>
+            <Show when={!compactFooter && hasFooterCounter()}>
+              <FooterCounter api={props.api} state={footerCounter()} />
+            </Show>
           </box>
-          <HintBar api={props.api} items={hintItems()} />
+          <Show when={compactFooter && hasFooterCounter()}>
+            <box flexDirection="row" justifyContent="flex-end" width={transcriptWidth}>
+              <FooterCounter api={props.api} state={footerCounter()} />
+            </box>
+          </Show>
+          <box
+            flexDirection="row"
+            justifyContent="space-between"
+            alignItems="center"
+            width={transcriptWidth}
+            gap={3}
+          >
+            <text fg={theme.textMuted}>{footerModelName()}</text>
+            <HintBar api={props.api} items={hintItems()} />
+          </box>
         </box>
       </box>
     </box>
@@ -699,6 +716,17 @@ function truncateWithEllipsis(text: string, maxWidth: number) {
   if (text.length <= maxWidth) return text;
   if (maxWidth <= 3) return ".".repeat(maxWidth);
   return `${text.slice(0, maxWidth - 3)}...`;
+}
+
+function getHintBarWidth(items: HintBarItem[]) {
+  if (items.length === 0) return 0;
+  return (
+    items.reduce(
+      (total, item) => total + (item.keybind ? item.keybind.length : 0) + item.label.length + 1,
+      0,
+    ) +
+    (items.length - 1) * 2
+  );
 }
 
 function getReasoningPartID(part: Extract<Part, { type: "reasoning" }>) {
