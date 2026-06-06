@@ -1,6 +1,6 @@
 import type { Provider } from "@opencode-ai/sdk/v2";
 import { describe, expect, it } from "vitest";
-import { resolveDefaultModel } from "../src/model";
+import { resolveDefaultModel, resolveModelContextWindow } from "../src/model";
 import type { SessionEntry } from "../src/types";
 
 function providerWithVariants(): Provider[] {
@@ -8,14 +8,18 @@ function providerWithVariants(): Provider[] {
     {
       id: "anthropic",
       name: "Anthropic",
-      models: {
-        "claude-sonnet-4.6": {
-          id: "claude-sonnet-4.6",
-          providerID: "anthropic",
-          name: "Claude Sonnet 4.6",
-          variants: {
-            fast: {},
-            thinking: {},
+        models: {
+          "claude-sonnet-4.6": {
+            id: "claude-sonnet-4.6",
+            providerID: "anthropic",
+            name: "Claude Sonnet 4.6",
+            limit: {
+              context: 200_000,
+              output: 8_000,
+            },
+            variants: {
+              fast: {},
+              thinking: {},
           },
         },
       },
@@ -76,5 +80,28 @@ describe("default model resolution", () => {
     expect(resolved.notice).toContain(
       "Configured mini model anthropic/claude-sonnet-4.6 (missing) was not found.",
     );
+  });
+
+  it("resolves a selected model context window from provider metadata", () => {
+    expect(
+      resolveModelContextWindow(providerWithVariants(), {
+        model: {
+          providerID: "anthropic",
+          modelID: "claude-sonnet-4.6",
+        },
+        variant: "fast",
+      }),
+    ).toBe(200_000);
+  });
+
+  it("returns undefined when the selected model is missing", () => {
+    expect(
+      resolveModelContextWindow(providerWithVariants(), {
+        model: {
+          providerID: "openai",
+          modelID: "gpt-5",
+        },
+      }),
+    ).toBeUndefined();
   });
 });

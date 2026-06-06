@@ -5,6 +5,7 @@ import type {
 } from "@opencode-ai/plugin/tui";
 import type { Setter } from "solid-js";
 import { version } from "../package.json";
+import { buildFooterCounterState } from "./counter";
 import {
   buildMiniErrorDetail,
   buildMiniPromptPayload,
@@ -14,11 +15,12 @@ import {
   resolveRuntimeMiniAgent,
   type ResolvedMiniAgent,
 } from "./agent";
-import { getSessionEntries, formatFullContext } from "./context";
+import { buildCopiedContext, getSessionEntries } from "./context";
 import { getErrorMessage } from "./diagnostics";
 import {
   resolveDefaultModel,
   formatResolvedModel,
+  resolveModelContextWindow,
   type ModelSource,
 } from "./model";
 import type {
@@ -102,8 +104,11 @@ export async function startQuestion(
   getUpdateWarning?: () => string | undefined,
 ) {
   const entries = getSessionEntries(api, sessionID);
-  const context =
-    mode === "main" ? formatFullContext(entries, config.tokenLimit) : "";
+  const copiedContext =
+    mode === "main"
+      ? buildCopiedContext(entries, config.tokenLimit)
+      : { text: "", usedTokens: undefined };
+  const context = copiedContext.text;
   const defaultResolvedModel = resolveDefaultModel(
     api.state.provider,
     config.model,
@@ -121,11 +126,17 @@ export async function startQuestion(
   let system = "";
 
   const dialogState: AnswerDialogState = {
+    mode,
     entries: [],
     streamingAnswer: "",
     loading: false,
     scrollbarVisible: false,
     spinnerFrame: 0,
+    copiedContextTokens: copiedContext.usedTokens,
+    lastCompletedMiniInputTokens: undefined,
+    modelContextWindow: undefined,
+    footerCounter: {},
+    inputPlaceholder: undefined,
     thinkingEnabled: thinkingPreference.get(),
     expandedThinkingPartIDs: {},
     update: getUpdateWarning?.(),
@@ -152,6 +163,21 @@ export async function startQuestion(
   let pendingScrollToBottom = false;
   let lastScrollTop = 0;
   let lastScrollHeight = 0;
+
+  const syncCounterState = () => {
+    dialogState.modelContextWindow = resolveModelContextWindow(
+      api.state.provider,
+      getResolvedModel(),
+    );
+    dialogState.footerCounter = buildFooterCounterState({
+      mode: dialogState.mode,
+      copiedContextTokens: dialogState.copiedContextTokens,
+      tokenLimit: config.tokenLimit,
+      lastCompletedMiniInputTokens: dialogState.lastCompletedMiniInputTokens,
+      modelContextWindow: dialogState.modelContextWindow,
+    });
+    dialogState.inputPlaceholder = dialogState.footerCounter.placeholder;
+  };
 
   const clearScrollTimer = () => {
     pendingScrollToBottom = false;
@@ -359,6 +385,7 @@ export async function startQuestion(
 
   const renderOverlay = (options: { focusInput?: boolean } = {}) => {
     if (closed) return;
+    syncCounterState();
     const streamingActive =
       dialogState.loading || Boolean(dialogState.streamingAnswer);
     const currentScrollTop = overlayScroller?.scrollTop ?? 0;
@@ -553,6 +580,9 @@ export async function startQuestion(
         if (event.properties.sessionID !== tempSessionID) return;
         const usedModel = submissionModelQueue.shift();
         refreshSession();
+        dialogState.lastCompletedMiniInputTokens =
+          getLastCompletedMiniInputTokens(dialogState.entries) ??
+          dialogState.lastCompletedMiniInputTokens;
         if (usedModel) {
           for (const entry of dialogState.entries) {
             if (
@@ -755,4 +785,14 @@ function buildMiniSessionTranscript(state: AnswerDialogState) {
 
 function buildContinuePrompt(transcript: string) {
   return ["[Context from a mini session]", transcript, "---\n"].join("\n\n");
+}
+
+function getLastCompletedMiniInputTokens(entries: AnswerDialogState["entries"]) {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const info = entries[index]?.info;
+    if (info.role !== "assistant") continue;
+    if (!info.time?.completed) continue;
+    if (typeof info.tokens?.input === "number") return info.tokens.input;
+  }
+  return undefined;
 }

@@ -1,6 +1,7 @@
 import type { InputRenderable, ScrollBoxRenderable } from "@opentui/core";
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { Message, Part } from "@opencode-ai/sdk/v2";
+import type { FooterCounterState } from "./counter";
 
 export type MiniConfig = {
   model: string | null;
@@ -55,11 +56,17 @@ export type ActiveDialogController = {
 };
 
 export type AnswerDialogState = {
+  mode: MiniMode;
   entries: SessionEntry[];
   streamingAnswer: string;
   loading: boolean;
   scrollbarVisible: boolean;
   spinnerFrame: number;
+  copiedContextTokens?: number;
+  lastCompletedMiniInputTokens?: number;
+  modelContextWindow?: number;
+  footerCounter: FooterCounterState;
+  inputPlaceholder?: string;
   thinkingEnabled: boolean;
   expandedThinkingPartIDs: Record<string, true>;
   notice?: string;

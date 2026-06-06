@@ -97,3 +97,14 @@ export function formatResolvedModel(resolved: ResolvedModel) {
   const base = `${resolved.model.providerID}/${resolved.model.modelID}`;
   return resolved.variant ? `${base} (${resolved.variant})` : base;
 }
+
+export function resolveModelContextWindow(
+  providers: TuiPluginApi["state"]["provider"],
+  resolved: ResolvedModel,
+) {
+  const model = resolved.model;
+  if (!model) return undefined;
+  return providers.find((provider) => provider.id === model.providerID)?.models[
+    model.modelID
+  ]?.limit?.context;
+}
