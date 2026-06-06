@@ -20,7 +20,7 @@ vi.mock("../src/context", () => ({
   formatFullContext,
 }));
 
-import { startQuestion } from "../src/session";
+import { openMiniSession, startQuestion } from "../src/session";
 import type {
   ActiveDialogController,
   MiniConfig,
@@ -75,12 +75,70 @@ function fakeApi() {
     event: {
       on: vi.fn(() => () => {}),
     },
+    route: {
+      current: { name: "session", params: { sessionID: "session-1" } },
+    },
   } as any;
 }
 
 afterEach(() => {
   formatFullContext.mockClear();
   resolveRuntimeMiniAgent.mockReset();
+});
+
+describe("openMiniSession", () => {
+  it("returns false and shows the active dialog when one is already open", () => {
+    const activeDialog = {
+      show: vi.fn(),
+    } as any;
+
+    const opened = openMiniSession(
+      fakeApi(),
+      config(),
+      "main",
+      vi.fn(),
+      { get: () => activeDialog, set: vi.fn() },
+      { get: () => undefined, set: vi.fn() },
+      { get: () => false, set: vi.fn() },
+      vi.fn(),
+    );
+
+    expect(opened).toBe(false);
+    expect(activeDialog.show).toHaveBeenCalledOnce();
+  });
+
+  it("returns true after creating a new dialog", () => {
+    resolveRuntimeMiniAgent.mockReturnValue({
+      mode: "plugin-managed",
+      requestedAgent: null,
+      agent: null,
+      allowedTools: ["read"],
+      permission: [],
+      permissionSource: "plugin-managed",
+      notices: [],
+    });
+
+    let activeDialog: ActiveDialogController | undefined;
+
+    const opened = openMiniSession(
+      fakeApi(),
+      config(),
+      "main",
+      vi.fn(),
+      {
+        get: () => activeDialog,
+        set: (dialog: ActiveDialogController | undefined) => {
+          activeDialog = dialog;
+        },
+      },
+      { get: () => undefined, set: vi.fn() },
+      { get: () => false, set: vi.fn() },
+      vi.fn(),
+    );
+
+    expect(opened).toBe(true);
+    expect(activeDialog).toBeDefined();
+  });
 });
 
 describe("startQuestion", () => {

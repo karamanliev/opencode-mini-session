@@ -46,7 +46,7 @@ type ErrorPath =
   | "session.create throw";
 
 
-export async function openMiniSession(
+export function openMiniSession(
   api: TuiPluginApi,
   config: MiniConfig,
   mode: MiniMode,
@@ -56,7 +56,7 @@ export async function openMiniSession(
   thinkingPreference: ThinkingPreferenceState,
   openPickerFn: (onAfterSelect: () => void) => void,
   getUpdateWarning?: () => string | undefined,
-) {
+): boolean {
   const currentRoute = api.route.current;
 
   if (currentRoute.name !== "session") {
@@ -64,13 +64,13 @@ export async function openMiniSession(
       variant: "error",
       message: "mini only works inside a session.",
     });
-    return;
+    return false;
   }
 
   const activeDialog = active.get();
   if (activeDialog) {
     activeDialog.show();
-    return;
+    return false;
   }
 
   const { sessionID } = currentRoute.params as { sessionID: string };
@@ -80,12 +80,13 @@ export async function openMiniSession(
     mode,
     sessionID,
     setOverlay,
-      active,
-      modelPreference,
-      thinkingPreference,
-      openPickerFn,
-      getUpdateWarning,
-    );
+    active,
+    modelPreference,
+    thinkingPreference,
+    openPickerFn,
+    getUpdateWarning,
+  );
+  return true;
 }
 
 export async function startQuestion(

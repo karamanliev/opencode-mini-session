@@ -229,9 +229,7 @@ const tui: TuiPlugin = async (api, options, meta) => {
       action: nextAction,
       activeDialog,
       open: () => {
-        setOriginSessionID(sessionID);
-        activeMode = mode;
-        void openMiniSession(api, config, mode, setOverlay, {
+        const opened = openMiniSession(api, config, mode, setOverlay, {
           get: () => activeDialog,
           set: (dialog) => {
             activeDialog = dialog;
@@ -247,6 +245,10 @@ const tui: TuiPlugin = async (api, options, meta) => {
             modelPickerOpen = false;
             onAfterSelect();
           }), updateWarning);
+        if (opened) {
+          setOriginSessionID(sessionID);
+          activeMode = mode;
+        }
       },
     });
   }
