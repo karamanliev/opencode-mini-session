@@ -187,7 +187,8 @@ export function AnswerDialog(props: AnswerDialogProps) {
             height={transcriptHeight}
             width={transcriptWidth}
             scrollY
-            stickyScroll={false}
+            stickyScroll
+            stickyStart="bottom"
             verticalScrollbarOptions={{ visible: showScrollbar() }}
           >
             <box flexDirection="column" gap={1} width={transcriptContentWidth}>

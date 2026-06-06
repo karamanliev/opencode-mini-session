@@ -23,6 +23,7 @@ vi.mock("../src/context", () => ({
 import { openMiniSession, startQuestion } from "../src/session";
 import type {
   ActiveDialogController,
+  OverlayState,
   MiniConfig,
   ModelPreferenceState,
   ThinkingPreferenceState,
@@ -81,7 +82,57 @@ function fakeApi() {
   } as any;
 }
 
+function resolvedAgent() {
+  return {
+    mode: "plugin-managed",
+    requestedAgent: null,
+    agent: null,
+    allowedTools: ["read"],
+    permission: [],
+    permissionSource: "plugin-managed",
+    notices: [],
+  };
+}
+
+function fakeScroller(options: {
+  scrollTop?: number;
+  scrollHeight?: number;
+  viewportHeight?: number;
+} = {}) {
+  const scroller = {
+    scrollTop: options.scrollTop ?? 0,
+    scrollHeight: options.scrollHeight ?? 20,
+    viewport: { height: options.viewportHeight ?? 10 },
+    scrollTo: vi.fn((position: number) => {
+      scroller.scrollTop =
+        position === Number.MAX_SAFE_INTEGER
+          ? Math.max(0, scroller.scrollHeight - scroller.viewport.height)
+          : position;
+    }),
+    scrollBy: vi.fn((delta: number) => {
+      scroller.scrollTop = Math.max(
+        0,
+        Math.min(
+          scroller.scrollTop + delta,
+          Math.max(0, scroller.scrollHeight - scroller.viewport.height),
+        ),
+      );
+    }),
+  };
+  return scroller;
+}
+
+async function flushScrollTimer() {
+  await vi.advanceTimersByTimeAsync(0);
+}
+
+async function flushStreamingRender() {
+  await vi.advanceTimersByTimeAsync(51);
+  await flushScrollTimer();
+}
+
 afterEach(() => {
+  vi.useRealTimers();
   formatFullContext.mockClear();
   resolveRuntimeMiniAgent.mockReset();
 });
@@ -142,6 +193,99 @@ describe("openMiniSession", () => {
 });
 
 describe("startQuestion", () => {
+  it("forces bottom scroll and follows streaming after submitting a prompt", async () => {
+    vi.useFakeTimers();
+    resolveRuntimeMiniAgent.mockResolvedValue(resolvedAgent());
+
+    const handlers: Record<string, (event: any) => void> = {};
+    const api = fakeApi();
+    api.event.on.mockImplementation((name: string, handler: (event: any) => void) => {
+      handlers[name] = handler;
+      return () => {};
+    });
+    let overlay: OverlayState | undefined;
+    const scroller = fakeScroller({
+      scrollTop: 30,
+      scrollHeight: 40,
+      viewportHeight: 10,
+    });
+
+    await startQuestion(
+      api,
+      config(),
+      "main",
+      "session-1",
+      ((next: OverlayState | undefined) => {
+        overlay = next;
+      }) as any,
+      { get: () => undefined, set: vi.fn() },
+      { get: () => undefined, set: vi.fn() },
+      { get: () => false, set: vi.fn() },
+      vi.fn(),
+    );
+
+    overlay?.onScroller?.(scroller as any);
+    expect(overlay?.onSubmit("hello")).toBe(true);
+    await flushScrollTimer();
+
+    expect(scroller.scrollTo).toHaveBeenCalledWith(Number.MAX_SAFE_INTEGER);
+
+    scroller.scrollHeight += 20;
+    handlers["session.next.text.delta"]({
+      properties: { sessionID: "mini-session", delta: "answer" },
+    });
+    await flushStreamingRender();
+
+    expect(scroller.scrollTo).toHaveBeenCalledTimes(2);
+    expect(scroller.scrollTop).toBe(50);
+  });
+
+  it("stops following streaming after the user scrolls up", async () => {
+    vi.useFakeTimers();
+    resolveRuntimeMiniAgent.mockResolvedValue(resolvedAgent());
+
+    const handlers: Record<string, (event: any) => void> = {};
+    const api = fakeApi();
+    api.event.on.mockImplementation((name: string, handler: (event: any) => void) => {
+      handlers[name] = handler;
+      return () => {};
+    });
+    let overlay: OverlayState | undefined;
+    const scroller = fakeScroller({
+      scrollTop: 30,
+      scrollHeight: 40,
+      viewportHeight: 10,
+    });
+
+    await startQuestion(
+      api,
+      config(),
+      "main",
+      "session-1",
+      ((next: OverlayState | undefined) => {
+        overlay = next;
+      }) as any,
+      { get: () => undefined, set: vi.fn() },
+      { get: () => undefined, set: vi.fn() },
+      { get: () => false, set: vi.fn() },
+      vi.fn(),
+    );
+
+    overlay?.onScroller?.(scroller as any);
+    expect(overlay?.onSubmit("hello")).toBe(true);
+    await flushScrollTimer();
+
+    scroller.scrollTop = 25;
+    scroller.scrollHeight += 20;
+    handlers["session.next.text.delta"]({
+      properties: { sessionID: "mini-session", delta: "answer" },
+    });
+    await flushStreamingRender();
+
+    expect(scroller.scrollTo).toHaveBeenCalledTimes(1);
+    expect(scroller.scrollTop).toBe(25);
+  });
+
   it("registers an active controller before agent resolution completes", async () => {
     const agentResolution = deferred<any>();
     resolveRuntimeMiniAgent.mockReturnValue(agentResolution.promise);

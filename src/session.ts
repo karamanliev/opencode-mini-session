@@ -147,8 +147,14 @@ export async function startQuestion(
   let spinnerTimer: ReturnType<typeof setInterval> | undefined;
   let overlayInput: InputRenderable | undefined;
   let overlayScroller: ScrollBoxRenderable | undefined;
+  let followStreamingToBottom = true;
+  let forceScrollToBottom = true;
+  let pendingScrollToBottom = false;
+  let lastScrollTop = 0;
+  let lastScrollHeight = 0;
 
   const clearScrollTimer = () => {
+    pendingScrollToBottom = false;
     if (!scrollTimer) return;
     clearTimeout(scrollTimer);
     scrollTimer = undefined;
@@ -189,15 +195,53 @@ export async function startQuestion(
     }, 0);
   };
 
+  const isScrollerAtBottom = () => {
+    if (!overlayScroller) return true;
+    const maxScrollTop = Math.max(
+      0,
+      overlayScroller.scrollHeight - overlayScroller.viewport.height,
+    );
+    return overlayScroller.scrollTop >= maxScrollTop - 1;
+  };
+
+  const updateScrollSnapshot = () => {
+    lastScrollTop = overlayScroller?.scrollTop ?? 0;
+    lastScrollHeight = overlayScroller?.scrollHeight ?? 0;
+  };
+
   const scheduleScrollToBottom = () => {
     if (closed || hidden) return;
     clearScrollTimer();
+    pendingScrollToBottom = true;
     scrollTimer = setTimeout(() => {
       scrollTimer = undefined;
-      if (closed || hidden) return;
+      if (closed || hidden) {
+        pendingScrollToBottom = false;
+        return;
+      }
       overlayScroller?.scrollTo(Number.MAX_SAFE_INTEGER);
+      updateScrollSnapshot();
+      pendingScrollToBottom = false;
       api.renderer.requestRender();
     }, 0);
+  };
+
+  const scrollBy = (delta: number) => {
+    followStreamingToBottom = false;
+    forceScrollToBottom = false;
+    pendingScrollToBottom = false;
+    clearScrollTimer();
+    overlayScroller?.scrollBy(delta);
+    updateScrollSnapshot();
+  };
+
+  const scrollTo = (position: number) => {
+    followStreamingToBottom = position === Number.MAX_SAFE_INTEGER;
+    forceScrollToBottom = position === Number.MAX_SAFE_INTEGER;
+    pendingScrollToBottom = false;
+    if (position !== Number.MAX_SAFE_INTEGER) clearScrollTimer();
+    overlayScroller?.scrollTo(position);
+    updateScrollSnapshot();
   };
 
   const restorePreviousFocus = () => {
@@ -315,6 +359,24 @@ export async function startQuestion(
 
   const renderOverlay = (options: { focusInput?: boolean } = {}) => {
     if (closed) return;
+    const streamingActive =
+      dialogState.loading || Boolean(dialogState.streamingAnswer);
+    const currentScrollTop = overlayScroller?.scrollTop ?? 0;
+    const currentScrollHeight = overlayScroller?.scrollHeight ?? 0;
+    if (streamingActive && !forceScrollToBottom && !pendingScrollToBottom) {
+      if (isScrollerAtBottom()) {
+        followStreamingToBottom = true;
+      } else if (
+        currentScrollTop < lastScrollTop ||
+        currentScrollHeight <= lastScrollHeight
+      ) {
+        followStreamingToBottom = false;
+      }
+    }
+    const shouldScrollToBottom =
+      forceScrollToBottom || (streamingActive && followStreamingToBottom);
+    forceScrollToBottom = false;
+    updateScrollSnapshot();
     if (renderTimer) {
       clearTimeout(renderTimer);
       renderTimer = undefined;
@@ -342,14 +404,13 @@ export async function startQuestion(
       onToggleThinking: toggleThinking,
       onToggleThinkingPart: toggleThinkingPart,
       onSubmit: submitPrompt,
-      scrollBy: (delta) => overlayScroller?.scrollBy(delta),
-      scrollTo: (position) => overlayScroller?.scrollTo(position),
+      scrollBy,
+      scrollTo,
     });
     if (options.focusInput) scheduleInputFocus();
     if (dialogState.loading) startSpinnerTimer();
     else clearSpinnerTimer();
-    if (dialogState.loading || dialogState.streamingAnswer)
-      scheduleScrollToBottom();
+    if (shouldScrollToBottom) scheduleScrollToBottom();
   };
 
   const setPromptError = (path: ErrorPath, cause: unknown) => {
@@ -432,6 +493,8 @@ export async function startQuestion(
     dialogState.loading = true;
     dialogState.spinnerFrame = 0;
     dialogState.streamingAnswer = "";
+    followStreamingToBottom = true;
+    forceScrollToBottom = true;
     submissionModelQueue.push(getModelName());
 
     renderOverlay({ focusInput: true });
