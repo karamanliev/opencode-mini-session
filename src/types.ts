@@ -8,11 +8,14 @@ export type MiniConfig = {
   agent: string | null;
   tokenLimit: number;
   keybind: string | false;
+  freshKeybind: string | false;
   enableThinking: boolean;
   toggleThinkingKeybind: string | false;
   allowedTools: string[] | null;
   allowedToolsProvided: boolean;
 };
+
+export type MiniMode = "main" | "fresh";
 
 export type SessionEntry = {
   info: Message;

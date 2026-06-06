@@ -17,6 +17,7 @@ function config(overrides: Partial<MiniConfig> = {}): MiniConfig {
     agent: null,
     tokenLimit: 50_000,
     keybind: "alt+b",
+    freshKeybind: "alt+n",
     enableThinking: false,
     toggleThinkingKeybind: "ctrl+t",
     allowedTools: null,
@@ -100,6 +101,15 @@ describe("config parsing", () => {
   it("disables the main keybind with false or none", () => {
     expect(parseConfig({ keybind: false }).keybind).toBe(false);
     expect(parseConfig({ keybind: "none" }).keybind).toBe(false);
+  });
+
+  it("parses fresh keybind values", () => {
+    expect(parseConfig({}).freshKeybind).toBe("alt+n");
+    expect(parseConfig({ freshKeybind: " alt+f " }).freshKeybind).toBe(
+      "alt+f",
+    );
+    expect(parseConfig({ freshKeybind: false }).freshKeybind).toBe(false);
+    expect(parseConfig({ freshKeybind: "none" }).freshKeybind).toBe(false);
   });
 });
 
@@ -232,6 +242,17 @@ describe("system prompts", () => {
     expect(prompt).not.toContain("configured OpenCode agent");
   });
 
+  it("omits session context tags in fresh plugin-managed mode", () => {
+    const resolved = resolveMiniAgent(config(), [], ["read"]);
+    const prompt = buildMiniSystemPrompt("", resolved, "fresh");
+
+    expect(prompt).toContain(
+      "No conversation context from the main session has been copied into this mini session.",
+    );
+    expect(prompt).not.toContain("<session-context>");
+    expect(prompt).toContain("You may only use the following tools");
+  });
+
   it("includes custom agent guidance without tool wording in custom-agent mode", () => {
     const resolved = resolveMiniAgent(
       config({ agent: "build" }),
@@ -244,6 +265,24 @@ describe("system prompts", () => {
       'You are answering a quick side question about an ongoing coding session and you are running as the configured OpenCode agent "build". Follow that agent\'s own instructions, role, tone, and constraints closely while answering this as a mini side question. Below is the conversation context from the session.',
     );
     expect(prompt).toContain("<session-context>\nmain context\n</session-context>");
+    expect(prompt).not.toContain("You may only use the following tools");
+  });
+
+  it("uses fresh custom-agent wording without context tags", () => {
+    const resolved = resolveMiniAgent(
+      config({ agent: "build" }),
+      [agent("build")],
+      ["read"],
+    );
+    const prompt = buildMiniSystemPrompt("", resolved, "fresh");
+
+    expect(prompt).toContain(
+      'You are answering a quick side question about an ongoing coding session and you are running as the configured OpenCode agent "build".',
+    );
+    expect(prompt).toContain(
+      "No conversation context from the main session has been copied into this mini session.",
+    );
+    expect(prompt).not.toContain("<session-context>");
     expect(prompt).not.toContain("You may only use the following tools");
   });
 });

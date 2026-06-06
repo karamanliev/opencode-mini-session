@@ -1,4 +1,5 @@
 import {
+  DEFAULT_FRESH_KEYBIND,
   DEFAULT_FULL_TOKEN_LIMIT,
   DEFAULT_KEYBIND,
   DEFAULT_TOGGLE_THINKING_KEYBIND,
@@ -19,6 +20,7 @@ export function parseConfig(options: unknown): MiniConfig {
       DEFAULT_FULL_TOKEN_LIMIT,
     ),
     keybind: parseKeybind(input.keybind, DEFAULT_KEYBIND),
+    freshKeybind: parseKeybind(input.freshKeybind, DEFAULT_FRESH_KEYBIND),
     enableThinking:
       typeof input.enableThinking === "boolean" ? input.enableThinking : false,
     toggleThinkingKeybind: parseKeybind(

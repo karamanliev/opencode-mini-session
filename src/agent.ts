@@ -2,10 +2,13 @@ import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { Agent, PermissionRuleset } from "@opencode-ai/sdk/v2";
 import { DEFAULT_ALLOWED_TOOLS } from "./constants";
 import { formatResolvedModel } from "./model";
-import type { MiniConfig, ResolvedModel } from "./types";
+import type { MiniConfig, MiniMode, ResolvedModel } from "./types";
 
 const MINI_SIDE_QUESTION_INSTRUCTION =
   "You are answering a quick side question about an ongoing coding session. Below is the conversation context from the session. Answer concisely based on what you can see.";
+
+const MINI_FRESH_INSTRUCTION =
+  "You are answering a quick side question about an ongoing coding session. No conversation context from the main session has been copied into this mini session. Answer concisely based only on the current mini-session messages and any tools or files you inspect.";
 
 const ADDITIONAL_PERMISSION_IDS = [
   "edit",
@@ -173,18 +176,31 @@ export function buildResolvedMiniAgent(
 export function buildMiniSystemPrompt(
   context: string,
   resolved: ResolvedMiniAgent,
+  mode: MiniMode = "main",
 ) {
-  const intro = buildMiniSystemIntro(resolved);
+  const intro = buildMiniSystemIntro(resolved, mode);
   const toolNote =
     resolved.mode === "plugin-managed"
       ? buildAllowedToolSystemNote(resolved.allowedTools)
       : "";
 
-  return `${intro}${toolNote}\n\n<session-context>\n${context}\n</session-context>`;
+  const sessionContext = context.trim()
+    ? `\n\n<session-context>\n${context}\n</session-context>`
+    : "";
+
+  return `${intro}${toolNote}${sessionContext}`;
 }
 
-function buildMiniSystemIntro(resolved: ResolvedMiniAgent) {
-  if (resolved.mode !== "custom-agent") return MINI_SIDE_QUESTION_INSTRUCTION;
+function buildMiniSystemIntro(resolved: ResolvedMiniAgent, mode: MiniMode) {
+  if (resolved.mode !== "custom-agent") {
+    return mode === "fresh"
+      ? MINI_FRESH_INSTRUCTION
+      : MINI_SIDE_QUESTION_INSTRUCTION;
+  }
+
+  if (mode === "fresh") {
+    return `You are answering a quick side question about an ongoing coding session and you are running as the configured OpenCode agent "${resolved.agent}". Follow that agent's own instructions, role, tone, and constraints closely while answering this as a mini side question. No conversation context from the main session has been copied into this mini session.`;
+  }
 
   return `You are answering a quick side question about an ongoing coding session and you are running as the configured OpenCode agent "${resolved.agent}". Follow that agent's own instructions, role, tone, and constraints closely while answering this as a mini side question. Below is the conversation context from the session.`;
 }
