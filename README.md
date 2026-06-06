@@ -6,7 +6,9 @@ https://github.com/user-attachments/assets/8201b065-2569-41ba-8eb7-ac2abddad2a5
 
 ## What it does
 
-Press `alt+b` for the default mini mode, or `alt+n` for a fresh mini mode with no copied conversation context. You can also run `/mini` or `/mini-fresh` from the command palette during any OpenCode session. A popup overlay opens immediately with a text input at the bottom. Type a question and press Enter to send it. The plugin:
+The mini session runs as an overlay alongside the main session without blocking it, so you can ask side questions while the main thread continues working.
+
+Press `alt+b` for the default mini mode, or `alt+n` for a fresh mini mode with no copied conversation context. You can also run `/mini` or `/mini-fresh` from the command palette during any OpenCode session. Type a question in the mini session dialog and send it. The plugin:
 
 1. Gathers context from the current session (token-limited)
 2. Creates a temporary isolated session with that context
