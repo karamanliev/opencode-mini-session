@@ -491,12 +491,8 @@ export async function startQuestion(
     );
 
     unsubscribers.push(
-      api.event.on("message.part.delta", (event) => {
-        if (
-          event.properties.sessionID !== tempSessionID ||
-          event.properties.field !== "text"
-        )
-          return;
+      api.event.on("session.next.text.delta", (event) => {
+        if (event.properties.sessionID !== tempSessionID) return;
         dialogState.streamingAnswer += event.properties.delta;
         scheduleRenderOverlay();
       }),
