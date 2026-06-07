@@ -163,6 +163,7 @@ export async function startQuestion(
   let pendingScrollToBottom = false;
   let lastScrollTop = 0;
   let lastScrollHeight = 0;
+  let lastCompletedTokenMessageID: string | undefined;
 
   const syncCounterState = () => {
     dialogState.modelContextWindow = resolveModelContextWindow(
@@ -563,6 +564,29 @@ export async function startQuestion(
     const refreshSession = () => {
       dialogState.entries = getSessionEntries(api, ephemeralSessionID);
       dialogState.streamingAnswer = "";
+      refreshLastCompletedMiniInputTokens();
+    };
+
+    const refreshLastCompletedMiniInputTokens = () => {
+      const latest = getLastCompletedMiniInputUsage(dialogState.entries);
+      if (!latest) return;
+
+      const current = dialogState.lastCompletedMiniInputTokens;
+      if (latest.messageID === lastCompletedTokenMessageID) {
+        if (current === undefined || latest.totalTokens > current) {
+          dialogState.lastCompletedMiniInputTokens = latest.totalTokens;
+        }
+        return;
+      }
+
+      lastCompletedTokenMessageID = latest.messageID;
+
+      if (current === undefined || latest.totalTokens >= current) {
+        dialogState.lastCompletedMiniInputTokens = latest.totalTokens;
+        return;
+      }
+
+      dialogState.lastCompletedMiniInputTokens = current + latest.inputTokens;
     };
 
     if (closed) {
@@ -580,9 +604,6 @@ export async function startQuestion(
         if (event.properties.sessionID !== tempSessionID) return;
         const usedModel = submissionModelQueue.shift();
         refreshSession();
-        dialogState.lastCompletedMiniInputTokens =
-          getLastCompletedMiniInputTokens(dialogState.entries) ??
-          dialogState.lastCompletedMiniInputTokens;
         if (usedModel) {
           for (const entry of dialogState.entries) {
             if (
@@ -787,12 +808,25 @@ function buildContinuePrompt(transcript: string) {
   return ["[Context from a mini session]", transcript, "---\n"].join("\n\n");
 }
 
-function getLastCompletedMiniInputTokens(entries: AnswerDialogState["entries"]) {
+function getLastCompletedMiniInputUsage(entries: AnswerDialogState["entries"]) {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const info = entries[index]?.info;
     if (info.role !== "assistant") continue;
     if (!info.time?.completed) continue;
-    if (typeof info.tokens?.input === "number") return info.tokens.input;
+    if (info.tokens) {
+      return {
+        messageID: info.id,
+        inputTokens: info.tokens.input,
+        totalTokens: getAssistantInputTokens(info.tokens),
+      };
+    }
   }
   return undefined;
+}
+
+function getAssistantInputTokens(tokens: {
+  input: number;
+  cache?: { read?: number; write?: number };
+}) {
+  return tokens.input + (tokens.cache?.read ?? 0) + (tokens.cache?.write ?? 0);
 }
