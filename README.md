@@ -2,7 +2,7 @@
 
 An OpenCode TUI plugin that opens interactive temporary mini sessions for side questions, either with injected main-session context or as a fresh no-context thread.
 
-https://github.com/user-attachments/assets/8201b065-2569-41ba-8eb7-ac2abddad2a5
+https://github.com/user-attachments/assets/7a668d45-dffc-4311-91fb-1460bf773238
 
 ## What it does
 
