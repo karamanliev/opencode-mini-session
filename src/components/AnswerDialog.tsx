@@ -690,7 +690,7 @@ function FooterCounter(props: {
         )}
       </Show>
       <Show when={props.state.miniSession && props.state.copiedContext}>
-        <text fg={theme.textMuted}>|</text>
+        <text fg={theme.primary}>·</text>
       </Show>
       <Show when={props.state.copiedContext}>
         {(copiedContext) => (
