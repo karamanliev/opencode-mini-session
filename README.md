@@ -17,29 +17,6 @@ Press `alt+b` for the default mini mode, or `alt+n` for a fresh mini mode with n
 5. Optionally injects the full mini-session transcript back into the main thread
 6. Deletes the ephemeral session on close
 
-## Keybinds
-
-### Trigger
-
-| Key | Action |
-|---|---|
-| `alt+b` (configurable) | Toggle main mini session overlay |
-| `alt+n` (configurable) | Toggle fresh mini session overlay |
-| `/mini` | Open mini session with copied session context |
-| `/mini-fresh` | Open mini session with no copied session context |
-| `/mini-model` | Change model for future mini sessions |
-
-### Inside the mini session
-
-| Key | Action |
-|---|---|
-| `enter` | Send question / follow-up |
-| `shift+enter` | Inject mini transcript into the main thread |
-| `alt+b` or `alt+n` (configurable) | Hide overlay, resumable |
-| `ctrl+t` (configurable) | Toggle thinking blocks |
-| `tab` | Change the model for the next question |
-| `esc` / `ctrl+c` | Cancel and close |
-
 ## Installation
 
 ### Automatic
@@ -63,6 +40,29 @@ Add to your OpenCode TUI config (`~/.config/opencode/tui.json`):
 ```
 
 OpenCode installs it automatically with Bun on startup.
+
+## Keybinds
+
+### Trigger
+
+| Key | Action |
+|---|---|
+| `alt+b` (configurable) | Toggle main mini session overlay |
+| `alt+n` (configurable) | Toggle fresh mini session overlay |
+| `/mini` | Open mini session with copied session context |
+| `/mini-fresh` | Open mini session with no copied session context |
+| `/mini-model` | Change model for future mini sessions |
+
+### Inside the mini session
+
+| Key | Action |
+|---|---|
+| `enter` | Send question / follow-up |
+| `shift+enter` | Inject mini transcript into the main thread |
+| `alt+b` or `alt+n` (configurable) | Hide overlay, resumable |
+| `ctrl+t` (configurable) | Toggle thinking blocks |
+| `tab` | Change the model for the next question |
+| `esc` / `ctrl+c` | Cancel and close |
 
 ## Configuration
 
