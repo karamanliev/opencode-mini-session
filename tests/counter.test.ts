@@ -27,9 +27,10 @@ describe("counter helpers", () => {
     ).toEqual({
       copiedContext: {
         usedTokens: 31_000,
+        totalAvailableTokens: 31_000,
         tokenLimit: 50_000,
-        text: "31.0K / 50.0K",
-        capReached: false,
+        text: "main 31.0K",
+        truncated: false,
       },
       miniSession: undefined,
       placeholder: undefined,
@@ -48,9 +49,10 @@ describe("counter helpers", () => {
     ).toEqual({
       copiedContext: {
         usedTokens: 31_000,
+        totalAvailableTokens: 31_000,
         tokenLimit: 50_000,
-        text: "31.0K / 50.0K",
-        capReached: false,
+        text: "main 31.0K",
+        truncated: false,
       },
       miniSession: {
         usedTokens: 11_240,
@@ -84,11 +86,12 @@ describe("counter helpers", () => {
     });
   });
 
-  it("marks copied-context cap and mini-session threshold states", () => {
+  it("marks copied-context truncation and mini-session threshold states", () => {
     expect(
       buildFooterCounterState({
         mode: "main",
         copiedContextTokens: 50_000,
+        copiedContextTotalTokens: 80_000,
         tokenLimit: 50_000,
         lastCompletedMiniInputTokens: 96_000,
         modelContextWindow: 100_000,
@@ -96,9 +99,10 @@ describe("counter helpers", () => {
     ).toEqual({
       copiedContext: {
         usedTokens: 50_000,
+        totalAvailableTokens: 80_000,
         tokenLimit: 50_000,
-        text: "50.0K / 50.0K",
-        capReached: true,
+        text: "main 50.0K/80.0K",
+        truncated: true,
       },
       miniSession: {
         usedTokens: 96_000,
@@ -108,6 +112,23 @@ describe("counter helpers", () => {
         limitReached: true,
       },
       placeholder: "Session context limit reached...",
+    });
+  });
+
+  it("shows copied context as copied over total when truncated", () => {
+    expect(
+      buildFooterCounterState({
+        mode: "main",
+        copiedContextTokens: 1_400,
+        copiedContextTotalTokens: 3_200,
+        tokenLimit: 1_400,
+      }).copiedContext,
+    ).toEqual({
+      usedTokens: 1_400,
+      totalAvailableTokens: 3_200,
+      tokenLimit: 1_400,
+      text: "main 1.4K/3.2K",
+      truncated: true,
     });
   });
 

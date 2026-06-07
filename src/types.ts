@@ -63,6 +63,7 @@ export type AnswerDialogState = {
   scrollbarVisible: boolean;
   spinnerFrame: number;
   copiedContextTokens?: number;
+  copiedContextTotalTokens?: number;
   lastCompletedMiniInputTokens?: number;
   modelContextWindow?: number;
   footerCounter: FooterCounterState;

@@ -107,7 +107,7 @@ export async function startQuestion(
   const copiedContext =
     mode === "main"
       ? buildCopiedContext(entries, config.tokenLimit)
-      : { text: "", usedTokens: undefined };
+      : { text: "", usedTokens: undefined, totalAvailableTokens: undefined };
   const context = copiedContext.text;
   const defaultResolvedModel = resolveDefaultModel(
     api.state.provider,
@@ -133,6 +133,7 @@ export async function startQuestion(
     scrollbarVisible: false,
     spinnerFrame: 0,
     copiedContextTokens: copiedContext.usedTokens,
+    copiedContextTotalTokens: copiedContext.totalAvailableTokens,
     lastCompletedMiniInputTokens: undefined,
     modelContextWindow: undefined,
     footerCounter: {},
@@ -163,7 +164,8 @@ export async function startQuestion(
   let pendingScrollToBottom = false;
   let lastScrollTop = 0;
   let lastScrollHeight = 0;
-  let lastCompletedTokenMessageID: string | undefined;
+  let currentTokenMessageID: string | undefined;
+  const incrementedTokenMessageIDs = new Set<string>();
 
   const syncCounterState = () => {
     dialogState.modelContextWindow = resolveModelContextWindow(
@@ -173,6 +175,7 @@ export async function startQuestion(
     dialogState.footerCounter = buildFooterCounterState({
       mode: dialogState.mode,
       copiedContextTokens: dialogState.copiedContextTokens,
+      copiedContextTotalTokens: dialogState.copiedContextTotalTokens,
       tokenLimit: config.tokenLimit,
       lastCompletedMiniInputTokens: dialogState.lastCompletedMiniInputTokens,
       modelContextWindow: dialogState.modelContextWindow,
@@ -572,21 +575,23 @@ export async function startQuestion(
       if (!latest) return;
 
       const current = dialogState.lastCompletedMiniInputTokens;
-      if (latest.messageID === lastCompletedTokenMessageID) {
-        if (current === undefined || latest.totalTokens > current) {
-          dialogState.lastCompletedMiniInputTokens = latest.totalTokens;
-        }
-        return;
-      }
-
-      lastCompletedTokenMessageID = latest.messageID;
-
-      if (current === undefined || latest.totalTokens >= current) {
+      if (current === undefined || latest.totalTokens > current) {
         dialogState.lastCompletedMiniInputTokens = latest.totalTokens;
+        currentTokenMessageID = latest.messageID;
         return;
       }
 
+      if (latest.messageID === currentTokenMessageID) {
+        return;
+      }
+
+      if (incrementedTokenMessageIDs.has(latest.messageID)) {
+        return;
+      }
+
+      incrementedTokenMessageIDs.add(latest.messageID);
       dialogState.lastCompletedMiniInputTokens = current + latest.inputTokens;
+      currentTokenMessageID = latest.messageID;
     };
 
     if (closed) {

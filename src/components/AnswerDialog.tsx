@@ -7,7 +7,6 @@ import {
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { Part } from "@opencode-ai/sdk/v2";
 import { createMemo, Show } from "solid-js";
-import { formatTokenCount } from "../counter";
 import { THINKING_TEXT } from "../constants";
 import type {
   AnswerDialogProps,
@@ -690,18 +689,13 @@ function FooterCounter(props: {
         )}
       </Show>
       <Show when={props.state.miniSession && props.state.copiedContext}>
-        <text fg={theme.primary}>·</text>
+        <text fg={theme.textMuted}>·</text>
       </Show>
       <Show when={props.state.copiedContext}>
         {(copiedContext) => (
-          <box flexDirection="row" gap={0}>
-            <text fg={theme.textMuted}>
-              {formatTokenCount(copiedContext().usedTokens)} /{" "}
-            </text>
-            <text fg={copiedContext().capReached ? theme.warning : theme.textMuted}>
-              {formatTokenCount(copiedContext().tokenLimit)}
-            </text>
-          </box>
+          <text fg={copiedContext().truncated ? theme.warning : theme.textMuted}>
+            {copiedContext().text}
+          </text>
         )}
       </Show>
     </box>

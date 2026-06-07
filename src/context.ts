@@ -17,18 +17,25 @@ export function formatFullContext(entries: SessionEntry[], tokenLimit: number) {
 }
 
 export function buildCopiedContext(entries: SessionEntry[], tokenLimit: number) {
+  const chunks = entries
+    .map((entry) => {
+      const text = formatEntry(entry);
+      return text ? { text, tokens: estimateTokens(text) } : undefined;
+    })
+    .filter((chunk): chunk is { text: string; tokens: number } => Boolean(chunk));
+  const totalAvailableTokens = chunks.reduce(
+    (total, chunk) => total + chunk.tokens,
+    0,
+  );
   const selected: string[] = [];
   let usedTokens = 0;
 
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const chunk = formatEntry(entries[index]);
-    if (!chunk) continue;
+  for (let index = chunks.length - 1; index >= 0; index -= 1) {
+    const chunk = chunks[index];
+    if (selected.length > 0 && usedTokens + chunk.tokens > tokenLimit) break;
 
-    const estimated = estimateTokens(chunk);
-    if (selected.length > 0 && usedTokens + estimated > tokenLimit) break;
-
-    selected.push(chunk);
-    usedTokens += estimated;
+    selected.push(chunk.text);
+    usedTokens += chunk.tokens;
 
     if (usedTokens >= tokenLimit) break;
   }
@@ -37,12 +44,14 @@ export function buildCopiedContext(entries: SessionEntry[], tokenLimit: number) 
     return {
       text: "No conversation context available.",
       usedTokens: 0,
+      totalAvailableTokens,
     };
   }
 
   return {
     text: selected.reverse().join("\n\n"),
     usedTokens,
+    totalAvailableTokens,
   };
 }
 

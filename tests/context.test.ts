@@ -15,7 +15,8 @@ describe("copied context", () => {
 
     expect(buildCopiedContext(entries, 50)).toEqual({
       text: "user:\nhello\n\nassistant:\nworld",
-      usedTokens: estimateTokens("user:\nhello\n\nassistant:\nworld"),
+      usedTokens: estimateTokens("user:\nhello") + estimateTokens("assistant:\nworld"),
+      totalAvailableTokens: estimateTokens("user:\nhello") + estimateTokens("assistant:\nworld"),
     });
   });
 
@@ -26,6 +27,9 @@ describe("copied context", () => {
     expect(buildCopiedContext([older, newer], estimateTokens("assistant:\nnewest message stays"))).toEqual({
       text: "assistant:\nnewest message stays",
       usedTokens: estimateTokens("assistant:\nnewest message stays"),
+      totalAvailableTokens:
+        estimateTokens("user:\nold message that should be dropped") +
+        estimateTokens("assistant:\nnewest message stays"),
     });
   });
 
@@ -36,6 +40,7 @@ describe("copied context", () => {
 
     expect(result.text).toBe(`assistant:\n${"x".repeat(200)}`);
     expect(result.usedTokens).toBeGreaterThan(10);
+    expect(result.totalAvailableTokens).toBe(result.usedTokens);
   });
 
   it("keeps formatFullContext behavior stable", () => {

@@ -6,9 +6,10 @@ export const MINI_SESSION_LIMIT_PERCENT = 95;
 export type FooterCounterState = {
   copiedContext?: {
     usedTokens: number;
+    totalAvailableTokens: number;
     tokenLimit: number;
     text: string;
-    capReached: boolean;
+    truncated: boolean;
   };
   miniSession?: {
     usedTokens: number;
@@ -51,17 +52,29 @@ export function isMiniSessionLimitReached(percentUsed?: number) {
 export function buildFooterCounterState(options: {
   mode: MiniMode;
   copiedContextTokens?: number;
+  copiedContextTotalTokens?: number;
   tokenLimit: number;
   lastCompletedMiniInputTokens?: number;
   modelContextWindow?: number;
 }): FooterCounterState {
+  const copiedContextTotalTokens =
+    options.copiedContextTotalTokens ?? options.copiedContextTokens;
+  const copiedContextTruncated =
+    options.copiedContextTokens !== undefined &&
+    copiedContextTotalTokens !== undefined &&
+    copiedContextTotalTokens > options.copiedContextTokens;
   const copiedContext =
     options.mode === "main" && options.copiedContextTokens !== undefined
       ? {
           usedTokens: options.copiedContextTokens,
+          totalAvailableTokens: copiedContextTotalTokens ?? options.copiedContextTokens,
           tokenLimit: options.tokenLimit,
-          text: `${formatTokenCount(options.copiedContextTokens)} / ${formatTokenCount(options.tokenLimit)}`,
-          capReached: options.copiedContextTokens >= options.tokenLimit,
+          text: formatCopiedContextCounter(
+            options.copiedContextTokens,
+            copiedContextTotalTokens ?? options.copiedContextTokens,
+            options.tokenLimit,
+          ),
+          truncated: copiedContextTruncated,
         }
       : undefined;
 
@@ -79,6 +92,15 @@ export function buildFooterCounterState(options: {
     placeholder:
       miniSession?.limitReached ? "Session context limit reached..." : undefined,
   };
+}
+
+function formatCopiedContextCounter(
+  usedTokens: number,
+  totalAvailableTokens: number,
+  tokenLimit: number,
+) {
+  if (totalAvailableTokens <= usedTokens) return `main ${formatTokenCount(usedTokens)}`;
+  return `main ${formatTokenCount(Math.min(usedTokens, tokenLimit))}/${formatTokenCount(totalAvailableTokens)}`;
 }
 
 function buildMiniSessionCounter(usedTokens: number, modelContextWindow?: number) {
