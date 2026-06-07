@@ -42,6 +42,16 @@ Press `alt+b` for the default mini mode, or `alt+n` for a fresh mini mode with n
 
 ## Installation
 
+### Automatic
+
+Just install the plugin with the OpenCode plugin manager:
+
+```sh
+opencode plugin install opencode-mini-session --global
+```
+
+### Manual
+
 Add to your OpenCode TUI config (`~/.config/opencode/tui.json`):
 
 ```json
