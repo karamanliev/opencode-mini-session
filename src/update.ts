@@ -3,6 +3,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { TuiPluginApi, TuiPluginMeta } from "@opencode-ai/plugin/tui";
 import type { Setter } from "solid-js";
+import { isVersionNewer } from "./version";
 
 const PACKAGE_NAME = "opencode-mini-session";
 
@@ -126,36 +127,6 @@ export async function selectUpdateRemoveDir(packageDir: string, name: string) {
   return wrapperPkg?.dependencies?.[name] ? wrapperDir : packageDir;
 }
 
-export function isVersionNewer(latest: string, current: string) {
-  const next = parseVersion(latest);
-  const prev = parseVersion(current);
-  if (!next || !prev) return false;
-
-  for (let i = 0; i < 3; i++) {
-    if (next.parts[i] !== prev.parts[i]) return next.parts[i] > prev.parts[i];
-  }
-
-  if (!next.pre.length && prev.pre.length) return true;
-  if (next.pre.length && !prev.pre.length) return false;
-
-  for (let i = 0; i < Math.max(next.pre.length, prev.pre.length); i++) {
-    const a = next.pre[i];
-    const b = prev.pre[i];
-    if (a === undefined) return false;
-    if (b === undefined) return true;
-    if (a === b) continue;
-
-    const aNumber = /^\d+$/.test(a) ? Number(a) : undefined;
-    const bNumber = /^\d+$/.test(b) ? Number(b) : undefined;
-    if (aNumber !== undefined && bNumber !== undefined) return aNumber > bNumber;
-    if (aNumber !== undefined) return false;
-    if (bNumber !== undefined) return true;
-    return a > b;
-  }
-
-  return false;
-}
-
 async function findPackageDir(startDir: string) {
   let dir = startDir;
   for (;;) {
@@ -187,13 +158,4 @@ async function fetchLatestVersion(name: string, signal: AbortSignal) {
   } catch {
     return undefined;
   }
-}
-
-function parseVersion(version: string) {
-  const match = version.match(/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+.+)?$/);
-  if (!match) return undefined;
-  return {
-    parts: [Number(match[1]), Number(match[2]), Number(match[3])],
-    pre: match[4]?.split(".") ?? [],
-  };
 }

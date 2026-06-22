@@ -6,10 +6,10 @@ import {
   buildUpdateWarning,
   checkPackageUpdate,
   handleAutoUpdateResult,
-  isVersionNewer,
   parseLatestVersion,
   selectUpdateRemoveDir,
 } from "../src/update";
+import { isVersionNewer } from "../src/version";
 
 async function tempDir() {
   const dir = join(

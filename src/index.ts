@@ -22,7 +22,7 @@ import type {
   ThinkingPreferenceState,
 } from "./types";
 import { startAutoUpdate } from "./update";
-import { isVersionAtLeast, MIN_KEYMAP_VERSION } from "./utils";
+import { isVersionAtLeast, MIN_KEYMAP_VERSION } from "./version";
 
 const tui: TuiPlugin = async (api, options, meta) => {
   const config = parseConfig(options);
