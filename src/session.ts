@@ -437,6 +437,12 @@ export async function startQuestion(
       onSubmit: submitPrompt,
       scrollBy,
       scrollTo,
+      submit: () => {
+        const value = (overlayInput?.value || "").trim();
+        if (value && !dialogState.loading && submitPrompt(value)) {
+          if (overlayInput) overlayInput.value = "";
+        }
+      },
     });
     if (options.focusInput) scheduleInputFocus();
     if (dialogState.loading) startSpinnerTimer();

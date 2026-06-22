@@ -97,4 +97,5 @@ export type AnswerDialogProps = {
 export type OverlayState = AnswerDialogProps & {
   scrollBy: (delta: number) => void;
   scrollTo: (position: number) => void;
+  submit: () => void;
 };

@@ -13,6 +13,7 @@ export const CMD_SCROLL_UP = "mini.scroll-up";
 export const CMD_SCROLL_DOWN = "mini.scroll-down";
 export const CMD_PAGE_UP = "mini.page-up";
 export const CMD_PAGE_DOWN = "mini.page-down";
+export const CMD_SUBMIT = "mini.submit";
 export const CMD_SCROLL_TOP = "mini.scroll-top";
 export const CMD_SCROLL_BOTTOM = "mini.scroll-bottom";
 

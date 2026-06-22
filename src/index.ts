@@ -2,26 +2,16 @@ import type { TuiPlugin, TuiPluginModule } from "@opencode-ai/plugin/tui";
 import { createEffect, createSignal, untrack } from "solid-js";
 import { createOverlaySlot } from "./components/AnswerDialog";
 import { parseConfig } from "./config";
+import { PLUGIN_ID } from "./constants";
 import {
-  CMD_CHANGE_MODEL,
-  CMD_CLOSE,
-  CMD_CONTINUE,
-  CMD_HIDE,
-  CMD_OPEN,
-  CMD_OPEN_FRESH,
-  CMD_PAGE_DOWN,
-  CMD_PAGE_UP,
-  CMD_SCROLL_BOTTOM,
-  CMD_SCROLL_DOWN,
-  CMD_SCROLL_TOP,
-  CMD_SCROLL_UP,
-  CMD_TOGGLE_THINKING,
-  CMD_TOGGLE_FRESH,
-  CMD_TOGGLE_MAIN,
-  PLUGIN_ID,
-  SCROLL_LINE_DELTA,
-  SCROLL_PAGE_DELTA,
-} from "./constants";
+  buildGlobalCommands,
+  buildPanelActions,
+  registerKeymapGlobalLayer,
+  registerKeymapPanelLayer,
+  registerLegacyGlobalCommands,
+  registerLegacyPanelKeybinds,
+  type KeybindContext,
+} from "./keybinds";
 import { openMiniSession, openModelPicker } from "./session";
 import { resolveMiniRouteAction, runMiniRouteAction } from "./routing";
 import type {
@@ -32,11 +22,10 @@ import type {
   ThinkingPreferenceState,
 } from "./types";
 import { startAutoUpdate } from "./update";
+import { isVersionAtLeast, MIN_KEYMAP_VERSION } from "./utils";
 
 const tui: TuiPlugin = async (api, options, meta) => {
   const config = parseConfig(options);
-  const keybind = config.keybind;
-  const freshKeybind = config.freshKeybind;
   const [overlay, setOverlay] = createSignal<OverlayState | undefined>(
     undefined,
     { equals: false },
@@ -87,132 +76,49 @@ const tui: TuiPlugin = async (api, options, meta) => {
     slots: { app: createOverlaySlot(overlay) },
   });
 
-  api.keymap.registerLayer({
-    priority: 1000,
-    enabled: () => Boolean(overlay()),
-    commands: [
-      { name: CMD_HIDE, run: () => overlay()?.onHide() },
-      {
-        name: CMD_CLOSE,
-        run: () => {
-          if (modelPickerOpen) {
-            api.ui.dialog.clear();
-            modelPickerOpen = false;
-          } else {
-            overlay()?.onClose();
-          }
-        },
-      },
-      { name: CMD_CONTINUE, run: () => overlay()?.onContinue() },
-      { name: CMD_TOGGLE_THINKING, run: () => overlay()?.onToggleThinking() },
-      {
-        name: CMD_CHANGE_MODEL,
-        run: () => {
-          modelPickerOpen = true;
-          overlay()?.onChangeModel();
-        },
-      },
-      { name: CMD_SCROLL_UP, run: () => overlay()?.scrollBy(-SCROLL_LINE_DELTA) },
-      { name: CMD_SCROLL_DOWN, run: () => overlay()?.scrollBy(SCROLL_LINE_DELTA) },
-      { name: CMD_PAGE_UP, run: () => overlay()?.scrollBy(-SCROLL_PAGE_DELTA) },
-      { name: CMD_PAGE_DOWN, run: () => overlay()?.scrollBy(SCROLL_PAGE_DELTA) },
-      { name: CMD_SCROLL_TOP, run: () => overlay()?.scrollTo(0) },
-      {
-        name: CMD_SCROLL_BOTTOM,
-        run: () => overlay()?.scrollTo(Number.MAX_SAFE_INTEGER),
-      },
-    ],
-    bindings: [
-      ...(config.toggleThinkingKeybind
-        ? [{ key: config.toggleThinkingKeybind, cmd: CMD_TOGGLE_THINKING }]
-        : []),
-      { key: "shift+enter", cmd: CMD_CONTINUE },
-      { key: "tab", cmd: CMD_CHANGE_MODEL },
-      { key: "escape", cmd: CMD_CLOSE },
-      { key: "ctrl+c", cmd: CMD_CLOSE },
-      { key: "pageup", cmd: CMD_PAGE_UP },
-      { key: "pagedown", cmd: CMD_PAGE_DOWN },
-    ],
-  });
+  const supportsKeymap = isVersionAtLeast(
+    api.app.version,
+    MIN_KEYMAP_VERSION,
+  );
 
-  api.keymap.registerLayer({
-    commands: [
-      {
-        name: CMD_TOGGLE_MAIN,
-        run() {
-          void triggerMiniMode("main", "keybind");
-        },
-      },
-      {
-        name: CMD_TOGGLE_FRESH,
-        run() {
-          void triggerMiniMode("fresh", "keybind");
-        },
-      },
-      {
-        namespace: "palette",
-        name: CMD_OPEN,
-        title: "mini",
-        desc: "Open a mini session for side questions",
-        category: "Plugin",
-        slashName: "mini",
-        enabled: () => api.route.current.name === "session",
-        run() {
-          void triggerMiniMode("main", "command");
-        },
-      },
-      {
-        namespace: "palette",
-        name: CMD_OPEN_FRESH,
-        title: "mini fresh",
-        desc: "Open a mini session without copied context",
-        category: "Plugin",
-        slashName: "mini-fresh",
-        enabled: () => api.route.current.name === "session",
-        run() {
-          void triggerMiniMode("fresh", "command");
-        },
-      },
-      {
-        namespace: "palette",
-        name: CMD_CHANGE_MODEL,
-        title: "mini model",
-        desc: "Change the model for future mini-session questions",
-        category: "Plugin",
-        slashName: "mini-model",
-        enabled: () => api.route.current.name === "session",
-        run() {
-          const currentRoute = api.route.current;
-          if (currentRoute.name !== "session") return;
-          const { sessionID } = currentRoute.params as { sessionID: string };
-          openModelPicker(api, config, sessionID, {
-            get: selectedModel,
-            set: setSelectedModel,
-          });
-        },
-      },
-    ],
-    bindings: [
-      ...(keybind
-        ? [
-            {
-              key: keybind,
-              cmd: CMD_TOGGLE_MAIN,
-              desc: "Toggle main mini session",
-            },
-          ]
-        : []),
-      ...(freshKeybind
-        ? [
-            {
-              key: freshKeybind,
-              cmd: CMD_TOGGLE_FRESH,
-              desc: "Toggle fresh mini session",
-            },
-          ]
-        : []),
-    ],
-  });
+  const ctx: KeybindContext = {
+    api,
+    config,
+    overlay,
+    modelPickerOpen: {
+      get: () => modelPickerOpen,
+      set: (v) => { modelPickerOpen = v; },
+    },
+    triggerMiniMode: (mode, source) => triggerMiniMode(mode, source),
+    openModelPicker: () => {
+      const currentRoute = api.route.current;
+      if (currentRoute.name !== "session") return;
+      const { sessionID } = currentRoute.params as { sessionID: string };
+      openModelPicker(api, config, sessionID, {
+        get: selectedModel,
+        set: setSelectedModel,
+      });
+    },
+  };
+
+  if (supportsKeymap) {
+    registerKeymapPanelLayer(api, buildPanelActions(ctx), () => Boolean(overlay()));
+    registerKeymapGlobalLayer(api, buildGlobalCommands(ctx));
+  } else if (api.command) {
+    const globalDispose = registerLegacyGlobalCommands(api, buildGlobalCommands(ctx));
+    api.lifecycle.onDispose(globalDispose);
+
+    let panelDispose: (() => void) | undefined;
+    createEffect(() => {
+      if (Boolean(overlay())) {
+        panelDispose = registerLegacyPanelKeybinds(api, buildPanelActions(ctx, true));
+      } else if (panelDispose) {
+        panelDispose();
+        panelDispose = undefined;
+      }
+    });
+    api.lifecycle.onDispose(() => panelDispose?.());
+  }
 
   async function triggerMiniMode(mode: MiniMode, source: "command" | "keybind") {
     const currentRoute = api.route.current;
