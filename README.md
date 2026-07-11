@@ -24,7 +24,7 @@ Press `alt+b` for the default mini mode, or `alt+n` for a fresh mini mode with n
 Just install the plugin with the OpenCode plugin manager:
 
 ```sh
-opencode plugin install opencode-mini-session --global
+opencode plugin opencode-mini-session --global
 ```
 
 ### Manual
@@ -131,6 +131,15 @@ Oldest messages are dropped to fit the `tokenLimit`, and the result is injected 
 Fresh mini mode skips this copied-context step entirely.
 
 ## Troubleshooting
+
+### Update from versions before 1.1.1
+
+Plugin versions before 1.1.1 cannot update themselves to the OpenCode 1.17-compatible release. Close OpenCode, force the plugin manager to fetch the latest package, then restart:
+
+```sh
+opencode plugin opencode-mini-session --global --force
+opencode
+```
 
 ### Force update from older versions
 
