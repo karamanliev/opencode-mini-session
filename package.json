@@ -2,6 +2,9 @@
   "name": "opencode-mini-session",
   "version": "1.1.0",
   "type": "module",
+  "engines": {
+    "opencode": ">=1.17.18 <2"
+  },
   "exports": {
     "./tui": "./src/index.ts"
   },
@@ -18,11 +21,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "1.14.48",
-    "@opencode-ai/sdk": "1.14.48",
-    "@opentui/core": "^0.2.6",
-    "@opentui/keymap": "^0.2.6",
-    "@opentui/solid": "^0.2.6",
+    "@opencode-ai/plugin": "^1.17.18",
+    "@opencode-ai/sdk": "^1.17.18",
+    "@opentui/core": "^0.4.3",
+    "@opentui/keymap": "^0.4.3",
+    "@opentui/solid": "^0.4.3",
     "solid-js": "^1.9.12"
   },
   "devDependencies": {
