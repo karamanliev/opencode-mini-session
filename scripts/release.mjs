@@ -30,6 +30,7 @@ if (!branch || branch.startsWith("(")) {
 
 run("npm", ["run", "test"]);
 run("npm", ["run", "typecheck"]);
+run("npm", ["run", "test:package"]);
 
 run("npm", ["version", "--no-git-tag-version", versionArg]);
 
