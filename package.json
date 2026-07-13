@@ -6,30 +6,36 @@
     "opencode": ">=1.17.18 <2"
   },
   "exports": {
-    "./tui": "./src/index.ts"
+    "./tui": "./dist/index.js"
   },
   "files": [
-    "src"
+    "dist"
   ],
   "repository": {
     "type": "git",
     "url": "https://github.com/karamanliev/opencode-mini-session"
   },
   "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepack": "npm run build",
     "release": "node scripts/release.mjs",
     "test": "vitest run",
+    "test:package": "node scripts/verify-packaged-tui.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "^1.17.18",
-    "@opencode-ai/sdk": "^1.17.18",
     "@opentui/core": "^0.4.3",
-    "@opentui/keymap": "^0.4.3",
     "@opentui/solid": "^0.4.3",
     "solid-js": "^1.9.12"
   },
   "devDependencies": {
+    "@babel/core": "^7.28.0",
+    "@babel/preset-typescript": "^7.27.1",
+    "@opencode-ai/plugin": "^1.17.18",
+    "@opencode-ai/sdk": "^1.17.18",
+    "@opentui/keymap": "^0.4.3",
     "@types/node": "^25.9.1",
+    "babel-preset-solid": "^1.9.12",
     "typescript": "^5.9.3",
     "vitest": "^4.1.7"
   }
