@@ -39,7 +39,7 @@ try {
     "bun",
     [
       "--eval",
-      'import plugin from "opencode-mini-session/tui"; if (plugin.id !== "local.opencode-mini-session" || typeof plugin.tui !== "function") throw new Error("Invalid packaged TUI module");',
+      'import plugin from "opencode-mini-session/tui"; if (plugin.id !== "opencode-mini-session" || typeof plugin.tui !== "function") throw new Error("Invalid packaged TUI module");',
     ],
     { cwd: installDir, stdio: "inherit" },
   );

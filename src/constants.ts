@@ -1,4 +1,4 @@
-export const PLUGIN_ID = "local.opencode-mini-session";
+export const PLUGIN_ID = "opencode-mini-session";
 
 export const CMD_OPEN = "mini.open";
 export const CMD_OPEN_FRESH = "mini.open-fresh";
