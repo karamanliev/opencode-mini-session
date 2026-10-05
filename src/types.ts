@@ -3,6 +3,8 @@ import type { SessionMessageInfo } from "@opencode/client";
 import type { FooterCounterState } from "./counter";
 import type { TuiContext } from "./opencode";
 
+export type ContinueAction = "queue" | "clipboard";
+
 export type MiniConfig = {
   model: string | null;
   variant: string | null;
@@ -12,6 +14,9 @@ export type MiniConfig = {
   freshKeybind: string | false;
   enableThinking: boolean;
   toggleThinkingKeybind: string | false;
+  tools: string[];
+  continueAction: ContinueAction;
+  cleanupStaleSessions: boolean;
 };
 
 export type MiniMode = "main" | "fresh";
@@ -100,12 +105,16 @@ export type AnswerDialogProps = {
   modelName: string;
   hideKey: string | false;
   toggleThinkingKeybind: string | false;
+  continueLabel: string;
+  continueOnError?: boolean;
   state: AnswerDialogState;
   onScroller?: (scroller: ScrollBoxRenderable | undefined) => void;
   onInput?: (input: InputRenderable | undefined) => void;
   onHide: () => void;
   onClose: () => void;
   onContinue: () => void;
+  onRetry: () => void;
+  onEmptySubmit?: () => void;
   onChangeModel: () => void;
   onToggleThinking: () => void;
   onToggleThinkingPart: (partID: string) => void;

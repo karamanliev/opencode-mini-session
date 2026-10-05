@@ -1,5 +1,4 @@
 import type { AgentInfo, PermissionRule } from "@opencode/client";
-import { DEFAULT_ALLOWED_TOOLS } from "./constants";
 import { formatResolvedModel } from "./model";
 import type { TuiContext } from "./opencode";
 import type { MiniConfig, MiniMode, ResolvedModel } from "./types";
@@ -34,6 +33,7 @@ export type PluginManagedMiniAgent = {
   agent: null;
   permission: PermissionRule[];
   permissionSource: "plugin-managed";
+  tools: string[];
   notices: string[];
 };
 
@@ -50,6 +50,7 @@ export type ResolvedMiniAgent = PluginManagedMiniAgent | CustomMiniAgent;
 
 export type MiniSessionCreatePayload = {
   title: string;
+  metadata?: Record<string, boolean>;
   location?: { directory: string };
   agent?: string;
   model?: { id: string; providerID: string; variant?: string };
@@ -129,8 +130,9 @@ export function buildResolvedMiniAgent(
     missingAgent: mode.missingAgent,
     unavailableAgent: mode.unavailableAgent,
     agent: null,
-    permission: buildPermissionRules(),
+    permission: buildPermissionRules(config.tools),
     permissionSource: "plugin-managed",
+    tools: [...config.tools],
     notices: buildMiniAgentNotices(config, mode),
   };
 }
@@ -144,7 +146,7 @@ export function buildMiniSystemPrompt(
   const intro = buildMiniSystemIntro(resolved, mode);
   const toolNote =
     resolved.mode === "plugin-managed"
-      ? buildToolSystemNote(DEFAULT_ALLOWED_TOOLS, directory)
+      ? buildToolSystemNote(resolved.tools, directory)
       : "";
 
   const sessionContext = context.trim()
@@ -209,7 +211,7 @@ export function formatMiniAgentDiagnostics(resolved: ResolvedMiniAgent) {
   }
 
   if (resolved.mode === "plugin-managed") {
-    fields.push(`tools=${DEFAULT_ALLOWED_TOOLS.length}`);
+    fields.push(`tools=${resolved.tools.length}`);
   }
 
   return fields;
@@ -268,10 +270,12 @@ function buildToolSystemNote(tools: string[], directory?: string) {
   return `${location} You may only use the following tools: ${tools.join(", ")}. Do not attempt to use any other tools. Prefer the read tool to open files you can name; relative paths resolve from the working directory, and read on a directory lists its entries. Use glob or grep only to locate paths you do not know.`;
 }
 
-export function buildPermissionRules(): PermissionRule[] {
+export function buildPermissionRules(
+  tools: string[],
+): PermissionRule[] {
   return [
     { action: "*", resource: "*", effect: "deny" },
-    ...DEFAULT_ALLOWED_TOOLS.map((action) => ({
+    ...tools.map((action) => ({
       action,
       resource: "*",
       effect: "allow" as const,

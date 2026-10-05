@@ -118,7 +118,7 @@ export function AnswerDialog(props: AnswerDialogProps) {
   const canContinue = createMemo(
     () =>
       !props.state.loading &&
-      !props.state.error &&
+      (props.continueOnError || !props.state.error) &&
       Boolean(extractAssistantText(props.state.entries)),
   );
   const createUserMessageHint = createMemo(() =>
@@ -334,7 +334,11 @@ export function AnswerDialog(props: AnswerDialogProps) {
               }}
               onSubmit={() => {
                 const submitted = (input?.value || inputValue).trim();
-                if (!submitted || props.state.loading) return;
+                if (!submitted) {
+                  props.onEmptySubmit?.();
+                  return;
+                }
+                if (props.state.loading) return;
                 if (!props.onSubmit(submitted)) return;
                 inputValue = "";
                 if (input) input.value = "";
@@ -360,10 +364,17 @@ export function AnswerDialog(props: AnswerDialogProps) {
             width={transcriptWidth}
             gap={2}
           >
+            <Show when={props.state.error && !props.state.loading}>
+              <ActionButton
+                api={props.api}
+                label="Retry"
+                onPress={props.onRetry}
+              />
+            </Show>
             <Show when={canContinue()}>
               <ActionButton
                 api={props.api}
-                label="Continue"
+                label={props.continueLabel}
                 keybind="shift+enter"
                 onPress={props.onContinue}
               />
@@ -804,12 +815,16 @@ export function createOverlaySlot(options: {
             modelName={current().modelName}
             hideKey={current().hideKey}
             toggleThinkingKeybind={current().toggleThinkingKeybind}
+            continueLabel={current().continueLabel}
+            continueOnError={current().continueOnError}
             state={current().state}
             onScroller={current().onScroller}
             onInput={current().onInput}
             onHide={current().onHide}
             onClose={current().onClose}
             onContinue={current().onContinue}
+            onRetry={current().onRetry}
+            onEmptySubmit={current().onEmptySubmit}
             onChangeModel={current().onChangeModel}
             onToggleThinking={current().onToggleThinking}
             onToggleThinkingPart={current().onToggleThinkingPart}

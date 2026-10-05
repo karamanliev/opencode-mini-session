@@ -21,6 +21,9 @@ function config(overrides: Partial<MiniConfig> = {}): MiniConfig {
     freshKeybind: "alt+n",
     enableThinking: false,
     toggleThinkingKeybind: "ctrl+t",
+    tools: [...DEFAULT_ALLOWED_TOOLS],
+    continueAction: "queue",
+    cleanupStaleSessions: true,
     ...overrides,
   };
 }
@@ -104,6 +107,48 @@ describe("config parsing", () => {
     expect(parseConfig({ freshKeybind: false }).freshKeybind).toBe(false);
     expect(parseConfig({ freshKeybind: "none" }).freshKeybind).toBe(false);
   });
+
+  it("parses tools with a read-only whitelist", () => {
+    expect(parseConfig({}).tools).toEqual(DEFAULT_ALLOWED_TOOLS);
+    expect(parseConfig({ tools: ["read", "websearch"] }).tools).toEqual([
+      "read",
+      "websearch",
+    ]);
+    expect(
+      parseConfig({ tools: ["read", "read", "websearch", "bogus"] }).tools,
+    ).toEqual(["read", "websearch"]);
+    expect(parseConfig({ tools: ["edit", "shell"] }).tools).toEqual(
+      DEFAULT_ALLOWED_TOOLS,
+    );
+    expect(parseConfig({ tools: [] }).tools).toEqual(DEFAULT_ALLOWED_TOOLS);
+    expect(parseConfig({ tools: "read" }).tools).toEqual(DEFAULT_ALLOWED_TOOLS);
+  });
+
+  it("parses model and tokenLimit values", () => {
+    expect(parseConfig({}).model).toBeNull();
+    expect(parseConfig({ model: " anthropic/claude " }).model).toBe(
+      "anthropic/claude",
+    );
+    expect(parseConfig({ model: 123 }).model).toBeNull();
+    expect(parseConfig({}).tokenLimit).toBe(50_000);
+    expect(parseConfig({ tokenLimit: 1234.9 }).tokenLimit).toBe(1234);
+    expect(parseConfig({ tokenLimit: -5 }).tokenLimit).toBe(50_000);
+    expect(parseConfig({ tokenLimit: "100" }).tokenLimit).toBe(50_000);
+  });
+
+  it("parses continueAction and cleanupStaleSessions", () => {
+    expect(parseConfig({}).continueAction).toBe("queue");
+    expect(parseConfig({ continueAction: "clipboard" }).continueAction).toBe(
+      "clipboard",
+    );
+    expect(parseConfig({ continueAction: "bogus" }).continueAction).toBe(
+      "queue",
+    );
+    expect(parseConfig({}).cleanupStaleSessions).toBe(true);
+    expect(
+      parseConfig({ cleanupStaleSessions: false }).cleanupStaleSessions,
+    ).toBe(false);
+  });
 });
 
 describe("agent resolution", () => {
@@ -165,6 +210,20 @@ describe("plugin-managed permissions", () => {
     for (const action of ["edit", "shell", "subagent", "websearch"]) {
       expect(effectFor(resolved.permission, action)).toBe("deny");
     }
+  });
+
+  it("uses configured tools for permissions and system prompts", () => {
+    const resolved = asPluginManaged(
+      resolveMiniAgent(config({ tools: ["read", "websearch"] }), []),
+    );
+
+    expect(effectFor(resolved.permission, "read")).toBe("allow");
+    expect(effectFor(resolved.permission, "websearch")).toBe("allow");
+    expect(effectFor(resolved.permission, "glob")).toBe("deny");
+
+    const prompt = buildMiniSystemPrompt("", resolved);
+    expect(prompt).toContain("You may only use the following tools: read, websearch");
+    expect(prompt).not.toContain("webfetch");
   });
 });
 

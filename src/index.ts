@@ -1,5 +1,6 @@
 import { Plugin } from "@opencode/plugin/tui";
 import { createEffect, createSignal, untrack } from "solid-js";
+import { cleanupStaleMiniSessions } from "./cleanup";
 import { createOverlaySlot } from "./components/AnswerDialog";
 import { parseConfig } from "./config";
 import { PLUGIN_ID } from "./constants";
@@ -7,14 +8,16 @@ import type { MiniKeybindActions } from "./keybinds";
 import { getCurrentRoute } from "./opencode";
 import { resolveMiniRouteAction, runMiniRouteAction } from "./routing";
 import { openMiniSession, openModelPicker } from "./session";
-import { startAutoUpdate } from "./update";
 import type {
   ActiveDialogController,
   MiniMode,
   ModelPreference,
+  ModelPreferenceState,
   OverlayState,
+  ResolvedModel,
   ThinkingPreferenceState,
 } from "./types";
+import { startAutoUpdate } from "./update";
 
 export default Plugin.define({
   id: PLUGIN_ID,
@@ -24,35 +27,63 @@ export default Plugin.define({
       undefined,
       { equals: false },
     );
-    const [selectedModel, setSelectedModel] = createSignal<ModelPreference>(
-      undefined,
-      { equals: false },
-    );
-    const [thinkingEnabled, setThinkingEnabled] = createSignal(
-      config.enableThinking,
-    );
     const [originSessionID, setOriginSessionID] = createSignal<
       string | undefined
     >(undefined);
     const [updateWarning, setUpdateWarning] = createSignal<
       string | undefined
     >(undefined);
+    const [preferences, updatePreferences] = ctx.storage.store("preferences", {
+      initial: {
+        model: null as ResolvedModel | null,
+        thinking: config.enableThinking,
+      },
+    });
     let activeDialog: ActiveDialogController | undefined;
     let activeMode: MiniMode | undefined;
+    let disposed = false;
     const modelPickerOpen = { value: false };
-    const thinkingPreference: ThinkingPreferenceState = {
-      get: thinkingEnabled,
-      set: setThinkingEnabled,
+
+    const modelPreference: ModelPreferenceState = {
+      get: () => preferences.model ?? undefined,
+      set: (model) => {
+        void updatePreferences((draft) => {
+          draft.model = model ?? null;
+        });
+      },
     };
+    const thinkingPreference: ThinkingPreferenceState = {
+      get: () => preferences.thinking,
+      set: (enabled) => {
+        void updatePreferences((draft) => {
+          draft.thinking = enabled;
+        });
+      },
+    };
+
     const updateController = new AbortController();
     startAutoUpdate(ctx, setUpdateWarning, updateController.signal);
 
+    if (config.cleanupStaleSessions) {
+      void cleanupStaleMiniSessions(ctx)
+        .then((removed) => {
+          if (removed === 0) return;
+          ctx.ui.toast.show({
+            variant: "info",
+            message: `Cleaned up ${removed} stale mini session${
+              removed === 1 ? "" : "s"
+            }.`,
+            duration: 3000,
+          });
+        })
+        .catch(() => {});
+    }
+
     const actions: MiniKeybindActions = {
       config,
-      isOverlayOpen: () => Boolean(overlay()),
       onSession: () => getCurrentRoute(ctx).kind === "session",
-      triggerMiniMode: (mode, source) => {
-        void triggerMiniMode(mode, source);
+      triggerMiniMode: (mode, source, initialQuestion, handoff) => {
+        void triggerMiniMode(mode, source, initialQuestion, handoff);
       },
       openModelPicker: () => {
         const route = getCurrentRoute(ctx);
@@ -114,7 +145,7 @@ export default Plugin.define({
         ctx,
         config,
         sessionID,
-        { get: selectedModel, set: setSelectedModel },
+        modelPreference,
         onAfterSelect,
         (open) => {
           modelPickerOpen.value = open;
@@ -125,6 +156,8 @@ export default Plugin.define({
     async function triggerMiniMode(
       mode: MiniMode,
       source: "command" | "keybind",
+      initialQuestion?: string,
+      handoff?: boolean,
     ) {
       const route = getCurrentRoute(ctx);
       if (route.kind !== "session") return;
@@ -134,18 +167,20 @@ export default Plugin.define({
         requestedMode: mode,
         activeMode,
         isVisible: activeDialog?.isVisible(),
+        forceReopen: handoff === true,
       });
 
       await runMiniRouteAction({
         action: nextAction,
         activeDialog,
         open: () => {
-          const opened = openMiniSession(
+          const opened = openMiniSession({
             ctx,
             config,
             mode,
+            sessionID,
             setOverlay,
-            {
+            active: {
               get: () => activeDialog,
               set: (dialog) => {
                 activeDialog = dialog;
@@ -155,20 +190,29 @@ export default Plugin.define({
                 }
               },
             },
-            { get: selectedModel, set: setSelectedModel },
+            modelPreference,
             thinkingPreference,
-            (onAfterSelect) => openPicker(sessionID, onAfterSelect),
-            () => updateWarning(),
-          );
+            openPickerFn: (onAfterSelect) =>
+              openPicker(sessionID, onAfterSelect),
+            getUpdateWarning: () => updateWarning(),
+            initialQuestion,
+            handoff,
+            isDisposed: () => disposed,
+          });
           if (opened) {
             setOriginSessionID(sessionID);
             activeMode = mode;
           }
         },
       });
+
+      if (initialQuestion && nextAction !== "open") {
+        overlay()?.onSubmit(initialQuestion);
+      }
     }
 
     return () => {
+      disposed = true;
       updateController.abort();
       unregisterSlot();
       void activeDialog?.close();

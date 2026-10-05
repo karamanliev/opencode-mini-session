@@ -55,6 +55,27 @@ describe("mini routing", () => {
     ).toBe("show");
   });
 
+  it("reopens when a fresh dialog is forced even in the same mode", () => {
+    expect(
+      resolveMiniRouteAction({
+        source: "command",
+        requestedMode: "main",
+        activeMode: "main",
+        isVisible: true,
+        forceReopen: true,
+      }),
+    ).toBe("switch");
+    expect(
+      resolveMiniRouteAction({
+        source: "command",
+        requestedMode: "main",
+        activeMode: "main",
+        isVisible: false,
+        forceReopen: true,
+      }),
+    ).toBe("switch");
+  });
+
   it("waits for close before opening the other mode", async () => {
     const events: string[] = [];
     let finishClose: (() => void) | undefined;
