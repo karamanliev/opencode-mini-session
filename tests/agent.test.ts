@@ -21,6 +21,15 @@ function config(overrides: Partial<MiniConfig> = {}): MiniConfig {
     freshKeybind: "alt+n",
     enableThinking: false,
     toggleThinkingKeybind: "ctrl+t",
+    tools: [...DEFAULT_ALLOWED_TOOLS],
+    continueAction: "queue",
+    cleanupStaleSessions: true,
+    recapKeybind: false,
+    recapScope: "project",
+    recapSessions: 15,
+    recapScanLimit: 50,
+    recapMinScore: 4,
+    recapExcludeDirs: [],
     ...overrides,
   };
 }
@@ -104,6 +113,72 @@ describe("config parsing", () => {
     expect(parseConfig({ freshKeybind: false }).freshKeybind).toBe(false);
     expect(parseConfig({ freshKeybind: "none" }).freshKeybind).toBe(false);
   });
+
+  it("parses tools with a read-only whitelist", () => {
+    expect(parseConfig({}).tools).toEqual(DEFAULT_ALLOWED_TOOLS);
+    expect(parseConfig({ tools: ["read", "websearch"] }).tools).toEqual([
+      "read",
+      "websearch",
+    ]);
+    expect(
+      parseConfig({ tools: ["read", "read", "websearch", "bogus"] }).tools,
+    ).toEqual(["read", "websearch"]);
+    expect(parseConfig({ tools: ["edit", "shell"] }).tools).toEqual(
+      DEFAULT_ALLOWED_TOOLS,
+    );
+    expect(parseConfig({ tools: [] }).tools).toEqual(DEFAULT_ALLOWED_TOOLS);
+    expect(parseConfig({ tools: "read" }).tools).toEqual(DEFAULT_ALLOWED_TOOLS);
+  });
+
+  it("parses model and tokenLimit values", () => {
+    expect(parseConfig({}).model).toBeNull();
+    expect(parseConfig({ model: " anthropic/claude " }).model).toBe(
+      "anthropic/claude",
+    );
+    expect(parseConfig({ model: 123 }).model).toBeNull();
+    expect(parseConfig({}).tokenLimit).toBe(50_000);
+    expect(parseConfig({ tokenLimit: 1234.9 }).tokenLimit).toBe(1234);
+    expect(parseConfig({ tokenLimit: -5 }).tokenLimit).toBe(50_000);
+    expect(parseConfig({ tokenLimit: "100" }).tokenLimit).toBe(50_000);
+  });
+
+  it("parses continueAction and cleanupStaleSessions", () => {
+    expect(parseConfig({}).continueAction).toBe("queue");
+    expect(parseConfig({ continueAction: "clipboard" }).continueAction).toBe(
+      "clipboard",
+    );
+    expect(parseConfig({ continueAction: "bogus" }).continueAction).toBe(
+      "queue",
+    );
+    expect(parseConfig({}).cleanupStaleSessions).toBe(true);
+    expect(
+      parseConfig({ cleanupStaleSessions: false }).cleanupStaleSessions,
+    ).toBe(false);
+  });
+
+  it("parses the recap options", () => {
+    const defaults = parseConfig({});
+    expect(defaults.recapKeybind).toBe(false);
+    expect(defaults.recapScope).toBe("project");
+    expect(defaults.recapSessions).toBe(15);
+    expect(defaults.recapScanLimit).toBe(50);
+    expect(defaults.recapMinScore).toBe(4);
+    expect(defaults.recapExcludeDirs).toEqual([]);
+
+    expect(parseConfig({ recapKeybind: "alt+r" }).recapKeybind).toBe("alt+r");
+    expect(parseConfig({ recapKeybind: "none" }).recapKeybind).toBe(false);
+    expect(parseConfig({ recapScope: "all" }).recapScope).toBe("all");
+    expect(parseConfig({ recapScope: "bogus" }).recapScope).toBe("project");
+    expect(parseConfig({ recapSessions: 3.9 }).recapSessions).toBe(3);
+    expect(parseConfig({ recapSessions: 0 }).recapSessions).toBe(15);
+    expect(parseConfig({ recapScanLimit: "10" }).recapScanLimit).toBe(50);
+    expect(parseConfig({ recapMinScore: 0 }).recapMinScore).toBe(0);
+    expect(parseConfig({ recapMinScore: -1 }).recapMinScore).toBe(4);
+    expect(
+      parseConfig({ recapExcludeDirs: [" /tmp/private ", "/tmp/private", 7] })
+        .recapExcludeDirs,
+    ).toEqual(["/tmp/private"]);
+  });
 });
 
 describe("agent resolution", () => {
@@ -166,6 +241,20 @@ describe("plugin-managed permissions", () => {
       expect(effectFor(resolved.permission, action)).toBe("deny");
     }
   });
+
+  it("uses configured tools for permissions and system prompts", () => {
+    const resolved = asPluginManaged(
+      resolveMiniAgent(config({ tools: ["read", "websearch"] }), []),
+    );
+
+    expect(effectFor(resolved.permission, "read")).toBe("allow");
+    expect(effectFor(resolved.permission, "websearch")).toBe("allow");
+    expect(effectFor(resolved.permission, "glob")).toBe("deny");
+
+    const prompt = buildMiniSystemPrompt("", resolved);
+    expect(prompt).toContain("You may only use the following tools: read, websearch");
+    expect(prompt).not.toContain("webfetch");
+  });
 });
 
 describe("custom agent behavior", () => {
@@ -190,6 +279,15 @@ describe("system prompts", () => {
     expect(prompt).toContain("<session-context>\nmain context\n</session-context>");
     expect(prompt).toContain("You may only use the following tools");
     expect(prompt).not.toContain("configured OpenCode agent");
+  });
+
+  it("uses the recap instruction and context tag in recap mode", () => {
+    const resolved = resolveMiniAgent(config(), []);
+    const prompt = buildMiniSystemPrompt("digest text", resolved, "recap");
+
+    expect(prompt).toContain("consolidated recap");
+    expect(prompt).toContain("<recap-context>\ndigest text\n</recap-context>");
+    expect(prompt).not.toContain("<session-context>");
   });
 
   it("guides file reads toward the read tool with the working directory", () => {

@@ -106,16 +106,3 @@ export function resolveModelContextWindow(
       candidate.providerID === model.providerID && candidate.id === model.modelID,
   )?.limit?.context;
 }
-
-export function formatModelLabel(
-  model: Pick<ModelInfo, "id" | "name"> | undefined,
-  providers: ProviderInfo[],
-  resolved: ResolvedModel,
-) {
-  if (!resolved.model) return "default";
-  const provider = providers.find(
-    (candidate) => candidate.id === resolved.model!.providerID,
-  );
-  const name = provider ? `${provider.name}/${resolved.model.modelID}` : undefined;
-  return name ?? resolved.model.modelID;
-}

@@ -3,6 +3,16 @@ import type { SessionMessageInfo } from "@opencode/client";
 import type { FooterCounterState } from "./counter";
 import type { TuiContext } from "./opencode";
 
+export type ContinueAction = "queue" | "clipboard";
+
+export type RecapScope = "project" | "all";
+
+export type RecapQuery = {
+  term: string;
+  excludes: string[];
+  scope?: RecapScope;
+};
+
 export type MiniConfig = {
   model: string | null;
   variant: string | null;
@@ -12,9 +22,18 @@ export type MiniConfig = {
   freshKeybind: string | false;
   enableThinking: boolean;
   toggleThinkingKeybind: string | false;
+  tools: string[];
+  continueAction: ContinueAction;
+  cleanupStaleSessions: boolean;
+  recapKeybind: string | false;
+  recapScope: RecapScope;
+  recapSessions: number;
+  recapScanLimit: number;
+  recapMinScore: number;
+  recapExcludeDirs: string[];
 };
 
-export type MiniMode = "main" | "fresh";
+export type MiniMode = "main" | "fresh" | "recap";
 
 export type SessionToolStatus = "streaming" | "running" | "completed" | "error";
 
@@ -100,12 +119,16 @@ export type AnswerDialogProps = {
   modelName: string;
   hideKey: string | false;
   toggleThinkingKeybind: string | false;
+  continueLabel: string;
+  continueOnError?: boolean;
   state: AnswerDialogState;
   onScroller?: (scroller: ScrollBoxRenderable | undefined) => void;
   onInput?: (input: InputRenderable | undefined) => void;
   onHide: () => void;
   onClose: () => void;
   onContinue: () => void;
+  onRetry: () => void;
+  onEmptySubmit?: () => void;
   onChangeModel: () => void;
   onToggleThinking: () => void;
   onToggleThinkingPart: (partID: string) => void;

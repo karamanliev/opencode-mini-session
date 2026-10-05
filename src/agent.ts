@@ -1,5 +1,4 @@
 import type { AgentInfo, PermissionRule } from "@opencode/client";
-import { DEFAULT_ALLOWED_TOOLS } from "./constants";
 import { formatResolvedModel } from "./model";
 import type { TuiContext } from "./opencode";
 import type { MiniConfig, MiniMode, ResolvedModel } from "./types";
@@ -9,6 +8,9 @@ const MINI_SIDE_QUESTION_INSTRUCTION =
 
 const MINI_FRESH_INSTRUCTION =
   "You are answering a quick side question about an ongoing coding session. No conversation context from the main session has been copied into this mini session. Answer concisely based only on the current mini-session messages and any tools or files you inspect.";
+
+const MINI_RECAP_INSTRUCTION =
+  "You are writing a consolidated recap of a project from a digest of past assistant sessions. The digest is provided below: each section covers one session with its objective, sampled requests, extracted facts and final reported state. Write the recap from the digest only; do not investigate the workspace and do not call tools.";
 
 export type MiniAgentMode = "plugin-managed" | "custom-agent";
 export type MiniPermissionSource = "plugin-managed" | "agent";
@@ -34,6 +36,7 @@ export type PluginManagedMiniAgent = {
   agent: null;
   permission: PermissionRule[];
   permissionSource: "plugin-managed";
+  tools: string[];
   notices: string[];
 };
 
@@ -50,6 +53,7 @@ export type ResolvedMiniAgent = PluginManagedMiniAgent | CustomMiniAgent;
 
 export type MiniSessionCreatePayload = {
   title: string;
+  metadata?: Record<string, boolean>;
   location?: { directory: string };
   agent?: string;
   model?: { id: string; providerID: string; variant?: string };
@@ -129,8 +133,9 @@ export function buildResolvedMiniAgent(
     missingAgent: mode.missingAgent,
     unavailableAgent: mode.unavailableAgent,
     agent: null,
-    permission: buildPermissionRules(),
+    permission: buildPermissionRules(config.tools),
     permissionSource: "plugin-managed",
+    tools: [...config.tools],
     notices: buildMiniAgentNotices(config, mode),
   };
 }
@@ -144,17 +149,23 @@ export function buildMiniSystemPrompt(
   const intro = buildMiniSystemIntro(resolved, mode);
   const toolNote =
     resolved.mode === "plugin-managed"
-      ? buildToolSystemNote(DEFAULT_ALLOWED_TOOLS, directory)
+      ? buildToolSystemNote(resolved.tools, directory)
       : "";
 
+  const tag = mode === "recap" ? "recap-context" : "session-context";
   const sessionContext = context.trim()
-    ? `\n\n<session-context>\n${context}\n</session-context>`
+    ? `\n\n<${tag}>\n${context}\n</${tag}>`
     : "";
 
   return `${intro}${toolNote}${sessionContext}`;
 }
 
 function buildMiniSystemIntro(resolved: ResolvedMiniAgent, mode: MiniMode) {
+  if (mode === "recap") {
+    if (resolved.mode !== "custom-agent") return MINI_RECAP_INSTRUCTION;
+    return `You are writing a consolidated recap of a project from a digest of past assistant sessions and you are running as the configured OpenCode agent "${resolved.agent}". Follow that agent's own instructions, role, tone, and constraints closely while producing this recap. Below is the digest of past sessions.`;
+  }
+
   if (resolved.mode !== "custom-agent") {
     return mode === "fresh"
       ? MINI_FRESH_INSTRUCTION
@@ -209,7 +220,7 @@ export function formatMiniAgentDiagnostics(resolved: ResolvedMiniAgent) {
   }
 
   if (resolved.mode === "plugin-managed") {
-    fields.push(`tools=${DEFAULT_ALLOWED_TOOLS.length}`);
+    fields.push(`tools=${resolved.tools.length}`);
   }
 
   return fields;
@@ -268,10 +279,12 @@ function buildToolSystemNote(tools: string[], directory?: string) {
   return `${location} You may only use the following tools: ${tools.join(", ")}. Do not attempt to use any other tools. Prefer the read tool to open files you can name; relative paths resolve from the working directory, and read on a directory lists its entries. Use glob or grep only to locate paths you do not know.`;
 }
 
-export function buildPermissionRules(): PermissionRule[] {
+export function buildPermissionRules(
+  tools: string[],
+): PermissionRule[] {
   return [
     { action: "*", resource: "*", effect: "deny" },
-    ...DEFAULT_ALLOWED_TOOLS.map((action) => ({
+    ...tools.map((action) => ({
       action,
       resource: "*",
       effect: "allow" as const,
