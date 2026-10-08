@@ -1,15 +1,18 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildUpdateWarning,
   checkPackageUpdate,
+  fetchLatestVersion,
   handleAutoUpdateResult,
   parseLatestVersion,
-  UPDATE_COMMAND,
+  UPDATE_SPEC,
 } from "../src/update";
 import { isSameMajorVersion, isVersionNewer } from "../src/version";
+
+afterEach(() => vi.unstubAllGlobals());
 
 async function tempDir() {
   const dir = join(
@@ -66,6 +69,33 @@ describe("parseLatestVersion", () => {
     expect(parseLatestVersion({ version: 4 })).toBeUndefined();
     expect(parseLatestVersion(null)).toBeUndefined();
     expect(parseLatestVersion("0.4.0")).toBeUndefined();
+  });
+});
+
+describe("v1 registry channel", () => {
+  it("queries v1 rather than latest and passes the abort signal", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ version: "1.1.4" }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    const signal = new AbortController().signal;
+    expect(await fetchLatestVersion("opencode-mini-session", signal)).toBe("1.1.4");
+    expect(fetch).toHaveBeenCalledWith(
+      "https://registry.npmjs.org/opencode-mini-session/v1",
+      { signal },
+    );
+  });
+
+  it("silently handles missing tags, network errors, and malformed payloads", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ version: 4 }) });
+    vi.stubGlobal("fetch", fetch);
+    for (let i = 0; i < 3; i++) {
+      expect(await fetchLatestVersion("opencode-mini-session", new AbortController().signal)).toBeUndefined();
+    }
   });
 });
 
@@ -159,8 +189,9 @@ describe("checkPackageUpdate", () => {
 
 describe("update presentation", () => {
   it("builds the manual v1 update warning", () => {
+    expect(UPDATE_SPEC).toBe("opencode-mini-session@v1");
     expect(buildUpdateWarning("1.1.4")).toBe(
-      `New version available: 1.1.4. Run \`${UPDATE_COMMAND}\` to update, then restart opencode.`,
+      `New version available: 1.1.4. Update ${UPDATE_SPEC} with the OpenCode plugin manager, then restart opencode.`,
     );
   });
 
@@ -180,12 +211,12 @@ describe("update presentation", () => {
     );
 
     expect(setUpdateWarning).toHaveBeenCalledWith(
-      `New version available: 1.1.4. Run \`${UPDATE_COMMAND}\` to update, then restart opencode.`,
+      buildUpdateWarning("1.1.4"),
     );
     expect(toast).toHaveBeenCalledWith({
       variant: "info",
       message:
-        `New opencode-mini-session 1.1.4 version available. Run \`${UPDATE_COMMAND}\` to update, then restart opencode.`,
+        buildUpdateWarning("1.1.4"),
       duration: 8000,
     });
   });

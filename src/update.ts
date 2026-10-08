@@ -6,7 +6,7 @@ import type { Setter } from "solid-js";
 import { isSameMajorVersion, isVersionNewer } from "./version";
 
 const PACKAGE_NAME = "opencode-mini-session";
-export const UPDATE_COMMAND = `opencode plugin ${PACKAGE_NAME}@1 --global --force`;
+export const UPDATE_SPEC = `${PACKAGE_NAME}@v1`;
 
 type PackageJson = {
   name?: string;
@@ -49,14 +49,14 @@ export function handleAutoUpdateResult(
     setUpdateWarning(warning);
     api.ui.toast({
       variant: "info",
-      message: `New ${result.name} ${result.latest} version available. Run \`${UPDATE_COMMAND}\` to update, then restart opencode.`,
+      message: warning,
       duration: 8000,
     });
   }
 }
 
 export function buildUpdateWarning(latest: string) {
-  return `New version available: ${latest}. Run \`${UPDATE_COMMAND}\` to update, then restart opencode.`;
+  return `New version available: ${latest}. Update ${UPDATE_SPEC} with the OpenCode plugin manager, then restart opencode.`;
 }
 
 export async function checkPackageUpdate(
@@ -111,9 +111,9 @@ async function readPackageJson(path: string): Promise<PackageJson | undefined> {
   }
 }
 
-async function fetchLatestVersion(name: string, signal: AbortSignal) {
+export async function fetchLatestVersion(name: string, signal: AbortSignal) {
   try {
-    const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}/latest`, {
+    const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}/v1`, {
       signal,
     });
     if (!response.ok) return undefined;
