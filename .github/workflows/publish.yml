@@ -33,7 +33,9 @@ jobs:
       - run: npm run test:package
 
       # This maintenance branch must never replace the v2 latest tag.
-      - run: npm publish --provenance --access public -t v1
+      - run: npm publish --provenance --access public
+        env:
+          NPM_CONFIG_TAG: legacy
 
       - name: Create GitHub release
         run: gh release create $GITHUB_REF_NAME --generate-notes

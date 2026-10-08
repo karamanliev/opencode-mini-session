@@ -1,7 +1,7 @@
 # OpenCode mini session
 
 > [!IMPORTANT]
-> This v1 plugin line requires OpenCode V1 (`opencode >=1.17.18 <2`). Keep the `@v1` suffix in plugin specifications so OpenCode does not install the V2 release.
+> This v1 plugin line requires OpenCode V1 (`opencode >=1.17.18 <2`). Keep the `@1` suffix in plugin specifications so OpenCode does not install the V2 release.
 
 > [!IMPORTANT]
 > If the plugin stopped working after an OpenCode update, see the [troubleshooting information](#refresh-the-plugin).
@@ -30,7 +30,7 @@ Press `alt+b` for the default mini mode, or `alt+n` for a fresh mini mode with n
 Just install the plugin with the OpenCode plugin manager:
 
 ```sh
-opencode plugin opencode-mini-session@v1 -g
+opencode plugin opencode-mini-session@1 -g
 ```
 
 ### Manual
@@ -40,7 +40,7 @@ Add to your OpenCode TUI config (`~/.config/opencode/tui.json`):
 ```json
 {
   "plugin": [
-    "opencode-mini-session@v1"
+    "opencode-mini-session@1"
   ]
 }
 ```
@@ -90,7 +90,7 @@ If you want to customize the plugin, your config should look something like this
 ```json
 {
   "plugin": [
-    ["opencode-mini-session@v1", {
+    ["opencode-mini-session@1", {
       "model": "anthropic/claude-sonnet-4.6",
       "variant": "high",
       "tokenLimit": 10000,
@@ -117,7 +117,7 @@ For example, configure mini to use a custom `pirate` agent:
 ```json
 {
   "plugin": [
-    ["opencode-mini-session@v1", { "agent": "pirate" }]
+    ["opencode-mini-session@1", { "agent": "pirate" }]
   ]
 }
 ```
@@ -143,11 +143,11 @@ Fresh mini mode skips this copied-context step entirely.
 If `/mini` is missing or the TUI does not load after updating OpenCode, close OpenCode and force a fresh plugin install:
 
 ```sh
-opencode plugin opencode-mini-session@v1 --global --force
+opencode plugin opencode-mini-session@1 --global --force
 opencode
 ```
 
-The plugin only checks the npm `v1` channel for compatible updates. It never deletes or changes its installed package, cache, or configuration. Updates are manual; keep the `@v1` suffix when refreshing. If you pinned an exact older version, explicitly update that pin to receive the fix.
+The plugin only checks the npm `legacy` channel for compatible v1 updates. It never deletes or changes its installed package, cache, or configuration. Updates are manual; keep the `@1` suffix when refreshing. If you pinned an exact older version, explicitly update that pin to receive the fix.
 
 The plugin can only check for updates after its TUI has loaded, so an incompatible cached version cannot update itself.
 

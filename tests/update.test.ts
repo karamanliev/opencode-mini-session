@@ -73,7 +73,7 @@ describe("parseLatestVersion", () => {
 });
 
 describe("v1 registry channel", () => {
-  it("queries v1 rather than latest and passes the abort signal", async () => {
+  it("queries legacy rather than latest and passes the abort signal", async () => {
     const fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ version: "1.1.4" }),
@@ -82,7 +82,7 @@ describe("v1 registry channel", () => {
     const signal = new AbortController().signal;
     expect(await fetchLatestVersion("opencode-mini-session", signal)).toBe("1.1.4");
     expect(fetch).toHaveBeenCalledWith(
-      "https://registry.npmjs.org/opencode-mini-session/v1",
+      "https://registry.npmjs.org/opencode-mini-session/legacy",
       { signal },
     );
   });
@@ -189,7 +189,7 @@ describe("checkPackageUpdate", () => {
 
 describe("update presentation", () => {
   it("builds the manual v1 update warning", () => {
-    expect(UPDATE_SPEC).toBe("opencode-mini-session@v1");
+    expect(UPDATE_SPEC).toBe("opencode-mini-session@1");
     expect(buildUpdateWarning("1.1.4")).toBe(
       `New version available: 1.1.4. Update ${UPDATE_SPEC} with the OpenCode plugin manager, then restart opencode.`,
     );

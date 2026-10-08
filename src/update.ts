@@ -6,7 +6,7 @@ import type { Setter } from "solid-js";
 import { isSameMajorVersion, isVersionNewer } from "./version";
 
 const PACKAGE_NAME = "opencode-mini-session";
-export const UPDATE_SPEC = `${PACKAGE_NAME}@v1`;
+export const UPDATE_SPEC = `${PACKAGE_NAME}@1`;
 
 type PackageJson = {
   name?: string;
@@ -113,7 +113,7 @@ async function readPackageJson(path: string): Promise<PackageJson | undefined> {
 
 export async function fetchLatestVersion(name: string, signal: AbortSignal) {
   try {
-    const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}/v1`, {
+    const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}/legacy`, {
       signal,
     });
     if (!response.ok) return undefined;
