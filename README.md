@@ -1,7 +1,7 @@
 # OpenCode mini session
 
 > [!IMPORTANT]
-> Plugin v2.0.0 and later require OpenCode V2 (`opencode >= 2`). For OpenCode V1, use a v1.x release of the plugin.
+> Plugin v2.0.0 and later require OpenCode V2 (`opencode >= 2`). OpenCode V1 remains supported on the [v1 maintenance branch](https://github.com/karamanliev/opencode-mini-session/tree/v1). Use `opencode-mini-session@1`; see [OpenCode V1 installation](#opencode-v1).
 >
 > If the plugin stopped working after an OpenCode update, see the [troubleshooting information](#refresh-the-plugin).
 
@@ -43,6 +43,28 @@ Add it to your OpenCode CLI config (`~/.config/opencode/cli.json`):
   ]
 }
 ```
+
+### OpenCode V1
+
+For OpenCode V1 (`>=1.17.18 <2`), install the v1 plugin line:
+
+```sh
+opencode plugin opencode-mini-session@1 -g
+```
+
+Or add it to your V1 TUI config (`~/.config/opencode/tui.json`):
+
+```json
+{
+  "plugin": [
+    "opencode-mini-session@1"
+  ]
+}
+```
+
+Keep the `@1` suffix to stay on v1. Plugin v1.1.4 fixes the update check that could delete the installed v1 plugin when a v2 release was available. Existing users should [refresh their installation](https://github.com/karamanliev/opencode-mini-session/blob/v1/README.md#refresh-the-plugin) to receive the fix; exact pins to older versions must be updated explicitly.
+
+For V1 configuration and troubleshooting, use the [v1 README](https://github.com/karamanliev/opencode-mini-session/blob/v1/README.md). The remaining instructions on this page are for OpenCode V2.
 
 ## Keybinds
 
