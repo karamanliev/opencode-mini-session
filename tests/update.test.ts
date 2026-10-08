@@ -7,9 +7,9 @@ import {
   checkPackageUpdate,
   handleAutoUpdateResult,
   parseLatestVersion,
-  selectUpdateRemoveDir,
+  UPDATE_COMMAND,
 } from "../src/update";
-import { isVersionNewer } from "../src/version";
+import { isSameMajorVersion, isVersionNewer } from "../src/version";
 
 async function tempDir() {
   const dir = join(
@@ -42,6 +42,12 @@ describe("isVersionNewer", () => {
     expect(isVersionNewer("1.0.0", "1.0.1")).toBe(false);
   });
 
+  it("checks major version compatibility separately from update ordering", () => {
+    expect(isSameMajorVersion("1.1.4", "1.1.3")).toBe(true);
+    expect(isSameMajorVersion("2.0.0", "1.1.3")).toBe(false);
+    expect(isSameMajorVersion("invalid", "1.1.3")).toBe(false);
+  });
+
   it("handles v prefixes, prereleases, and build metadata", () => {
     expect(isVersionNewer("v1.0.1", "1.0.0")).toBe(true);
     expect(isVersionNewer("1.0.0", "1.0.0-beta.1")).toBe(true);
@@ -60,40 +66,6 @@ describe("parseLatestVersion", () => {
     expect(parseLatestVersion({ version: 4 })).toBeUndefined();
     expect(parseLatestVersion(null)).toBeUndefined();
     expect(parseLatestVersion("0.4.0")).toBeUndefined();
-  });
-});
-
-describe("selectUpdateRemoveDir", () => {
-  it("selects the wrapper directory for opencode cache layouts", async () => {
-    const root = await tempDir();
-    try {
-      const wrapper = join(root, "wrapper");
-      const installed = join(wrapper, "node_modules", "opencode-mini-session");
-      await mkdir(installed, { recursive: true });
-      await writeJson(join(wrapper, "package.json"), {
-        dependencies: { "opencode-mini-session": "0.3.0" },
-      });
-
-      await expect(
-        selectUpdateRemoveDir(installed, "opencode-mini-session"),
-      ).resolves.toBe(wrapper);
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  });
-
-  it("falls back to the package directory when no wrapper is detected", async () => {
-    const root = await tempDir();
-    try {
-      const installed = join(root, "node_modules", "opencode-mini-session");
-      await mkdir(installed, { recursive: true });
-
-      await expect(
-        selectUpdateRemoveDir(installed, "opencode-mini-session"),
-      ).resolves.toBe(installed);
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
   });
 });
 
@@ -119,60 +91,66 @@ describe("checkPackageUpdate", () => {
     }
   });
 
-  it("removes the selected directory when an update is needed", async () => {
+  it("reports a same-major update without modifying the package", async () => {
     const root = await tempDir();
     try {
       const wrapper = join(root, "wrapper");
       const installed = await packageDir(
         join(wrapper, "node_modules", "opencode-mini-session"),
+        "1.1.3",
       );
       await writeJson(join(wrapper, "package.json"), {
-        dependencies: { "opencode-mini-session": "0.3.0" },
+        dependencies: { "opencode-mini-session": "1.1.3" },
       });
 
       const result = await checkPackageUpdate(
         installed,
         new AbortController().signal,
-        async () => "0.4.0",
+        async () => "1.1.4",
       );
 
       expect(result).toEqual({
         updated: true,
         name: "opencode-mini-session",
-        current: "0.3.0",
-        latest: "0.4.0",
-        removeDir: wrapper,
+        current: "1.1.3",
+        latest: "1.1.4",
       });
-      await expect(
-        readFile(join(wrapper, "package.json"), "utf8"),
-      ).rejects.toThrow();
+      await expect(readFile(join(wrapper, "package.json"), "utf8")).resolves.toBe(
+        JSON.stringify({ dependencies: { "opencode-mini-session": "1.1.3" } }),
+      );
+      await expect(readFile(join(installed, "package.json"), "utf8")).resolves.toBe(
+        JSON.stringify({ name: "opencode-mini-session", version: "1.1.3" }),
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   });
 
-  it("returns metadata when removal fails", async () => {
+  it("ignores a newer major version without modifying the package", async () => {
     const root = await tempDir();
     try {
-      const installed = await packageDir(root, "0.3.0");
-
-      const result = await checkPackageUpdate(
-        installed,
-        new AbortController().signal,
-        async () => "0.4.0",
-        async () => {
-          throw new Error("failed");
-        },
+      const wrapper = join(root, "wrapper");
+      const installed = await packageDir(
+        join(wrapper, "node_modules", "opencode-mini-session"),
+        "1.1.3",
       );
-
-      expect(result).toEqual({
-        updated: false,
-        error: "remove_failed",
-        name: "opencode-mini-session",
-        current: "0.3.0",
-        latest: "0.4.0",
-        removeDir: root,
+      await writeJson(join(wrapper, "package.json"), {
+        dependencies: { "opencode-mini-session": "1.1.3" },
       });
+
+      await expect(
+        checkPackageUpdate(
+          installed,
+          new AbortController().signal,
+          async () => "2.0.0",
+        ),
+      ).resolves.toEqual({ updated: false });
+      await expect(readFile(join(wrapper, "package.json"), "utf8")).resolves.toBe(
+        JSON.stringify({ dependencies: { "opencode-mini-session": "1.1.3" } }),
+      );
+      await expect(readFile(join(installed, "package.json"), "utf8")).resolves.toBe(
+        JSON.stringify({ name: "opencode-mini-session", version: "1.1.3" }),
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -180,13 +158,13 @@ describe("checkPackageUpdate", () => {
 });
 
 describe("update presentation", () => {
-  it("builds the restart warning", () => {
-    expect(buildUpdateWarning("0.4.0")).toBe(
-      "New version available: 0.4.0. Restart opencode to finish updating.",
+  it("builds the manual v1 update warning", () => {
+    expect(buildUpdateWarning("1.1.4")).toBe(
+      `New version available: 1.1.4. Run \`${UPDATE_COMMAND}\` to update, then restart opencode.`,
     );
   });
 
-  it("sets warning and shows toast for successful updates", () => {
+  it("sets warning and shows a manual update toast", () => {
     const toast = vi.fn();
     const setUpdateWarning = vi.fn();
 
@@ -195,47 +173,34 @@ describe("update presentation", () => {
       {
         updated: true,
         name: "opencode-mini-session",
-        current: "0.3.0",
-        latest: "0.4.0",
-        removeDir: "/cache/wrapper",
+        current: "1.1.3",
+        latest: "1.1.4",
       },
       setUpdateWarning,
     );
 
     expect(setUpdateWarning).toHaveBeenCalledWith(
-      "New version available: 0.4.0. Restart opencode to finish updating.",
+      `New version available: 1.1.4. Run \`${UPDATE_COMMAND}\` to update, then restart opencode.`,
     );
     expect(toast).toHaveBeenCalledWith({
       variant: "info",
       message:
-        "New opencode-mini-session 0.4.0 version available. Restart opencode to apply the update.",
+        `New opencode-mini-session 1.1.4 version available. Run \`${UPDATE_COMMAND}\` to update, then restart opencode.`,
       duration: 8000,
     });
   });
 
-  it("shows a warning toast for removal failures", () => {
+  it("does nothing when no update is available", () => {
     const toast = vi.fn();
     const setUpdateWarning = vi.fn();
 
     handleAutoUpdateResult(
       { ui: { toast } },
-      {
-        updated: false,
-        error: "remove_failed",
-        name: "opencode-mini-session",
-        current: "0.3.0",
-        latest: "0.4.0",
-        removeDir: "/cache/wrapper",
-      },
+      { updated: false },
       setUpdateWarning,
     );
 
     expect(setUpdateWarning).not.toHaveBeenCalled();
-    expect(toast).toHaveBeenCalledWith({
-      variant: "warning",
-      message:
-        "Could not update opencode-mini-session. Clear the opencode plugin cache and restart.",
-      duration: 8000,
-    });
+    expect(toast).not.toHaveBeenCalled();
   });
 });

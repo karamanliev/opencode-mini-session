@@ -1,28 +1,20 @@
-import { readFile, rm } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { TuiPluginApi, TuiPluginMeta } from "@opencode-ai/plugin/tui";
 import type { Setter } from "solid-js";
-import { isVersionNewer } from "./version";
+import { isSameMajorVersion, isVersionNewer } from "./version";
 
 const PACKAGE_NAME = "opencode-mini-session";
+export const UPDATE_COMMAND = `opencode plugin ${PACKAGE_NAME}@1 --global --force`;
 
 type PackageJson = {
   name?: string;
   version?: string;
-  dependencies?: Record<string, string>;
 };
 
 export type UpdateResult =
-  | { updated: true; name: string; current: string; latest: string; removeDir: string }
-  | {
-      updated: false;
-      error: "remove_failed";
-      name: string;
-      current: string;
-      latest: string;
-      removeDir: string;
-    }
+  | { updated: true; name: string; current: string; latest: string }
   | { updated: false };
 
 export async function checkAutoUpdate(
@@ -57,50 +49,31 @@ export function handleAutoUpdateResult(
     setUpdateWarning(warning);
     api.ui.toast({
       variant: "info",
-      message: `New ${result.name} ${result.latest} version available. Restart opencode to apply the update.`,
-      duration: 8000,
-    });
-    return;
-  }
-
-  if ("error" in result && result.error === "remove_failed") {
-    api.ui.toast({
-      variant: "warning",
-      message: `Could not update ${result.name}. Clear the opencode plugin cache and restart.`,
+      message: `New ${result.name} ${result.latest} version available. Run \`${UPDATE_COMMAND}\` to update, then restart opencode.`,
       duration: 8000,
     });
   }
 }
 
 export function buildUpdateWarning(latest: string) {
-  return `New version available: ${latest}. Restart opencode to finish updating.`;
+  return `New version available: ${latest}. Run \`${UPDATE_COMMAND}\` to update, then restart opencode.`;
 }
 
 export async function checkPackageUpdate(
   packageDir: string,
   signal: AbortSignal,
   fetchVersion: (name: string, signal: AbortSignal) => Promise<string | undefined> = fetchLatestVersion,
-  remove: (path: string) => Promise<void> = (path) =>
-    rm(path, { recursive: true, force: true }),
 ): Promise<UpdateResult> {
   const pkg = await readPackageJson(join(packageDir, "package.json"));
   if (!pkg?.name || !pkg.version) return { updated: false };
 
   const latest = await fetchVersion(pkg.name, signal);
-  if (!latest || !isVersionNewer(latest, pkg.version)) return { updated: false };
-
-  const removeDir = await selectUpdateRemoveDir(packageDir, pkg.name);
-  try {
-    await remove(removeDir);
-  } catch {
-    return {
-      updated: false,
-      error: "remove_failed",
-      name: pkg.name,
-      current: pkg.version,
-      latest,
-      removeDir,
-    };
+  if (
+    !latest ||
+    !isSameMajorVersion(latest, pkg.version) ||
+    !isVersionNewer(latest, pkg.version)
+  ) {
+    return { updated: false };
   }
 
   return {
@@ -108,7 +81,6 @@ export async function checkPackageUpdate(
     name: pkg.name,
     current: pkg.version,
     latest,
-    removeDir,
   };
 }
 
@@ -116,15 +88,6 @@ export function parseLatestVersion(data: unknown) {
   return data && typeof data === "object" && typeof (data as { version?: unknown }).version === "string"
     ? (data as { version: string }).version
     : undefined;
-}
-
-export async function selectUpdateRemoveDir(packageDir: string, name: string) {
-  const nodeModulesDir = dirname(packageDir);
-  if (basename(nodeModulesDir) !== "node_modules") return packageDir;
-
-  const wrapperDir = dirname(nodeModulesDir);
-  const wrapperPkg = await readPackageJson(join(wrapperDir, "package.json"));
-  return wrapperPkg?.dependencies?.[name] ? wrapperDir : packageDir;
 }
 
 async function findPackageDir(startDir: string) {

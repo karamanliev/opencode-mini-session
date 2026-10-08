@@ -1,6 +1,9 @@
 # OpenCode mini session
 
 > [!IMPORTANT]
+> This v1 plugin line requires OpenCode V1 (`opencode >=1.17.18 <2`). Keep the `@1` suffix in plugin specifications so OpenCode does not install the V2 release.
+
+> [!IMPORTANT]
 > If the plugin stopped working after an OpenCode update, see the [troubleshooting information](#refresh-the-plugin).
 
 An OpenCode TUI plugin that opens interactive temporary mini sessions for side questions, either with injected main-session context or as a fresh no-context thread.
@@ -27,7 +30,7 @@ Press `alt+b` for the default mini mode, or `alt+n` for a fresh mini mode with n
 Just install the plugin with the OpenCode plugin manager:
 
 ```sh
-opencode plugin opencode-mini-session --global
+opencode plugin opencode-mini-session@1 --global
 ```
 
 ### Manual
@@ -37,7 +40,7 @@ Add to your OpenCode TUI config (`~/.config/opencode/tui.json`):
 ```json
 {
   "plugin": [
-    "opencode-mini-session"
+    "opencode-mini-session@1"
   ]
 }
 ```
@@ -140,11 +143,11 @@ Fresh mini mode skips this copied-context step entirely.
 If `/mini` is missing or the TUI does not load after updating OpenCode, close OpenCode and force a fresh plugin install:
 
 ```sh
-opencode plugin opencode-mini-session --global --force
+opencode plugin opencode-mini-session@1 --global --force
 opencode
 ```
 
-The plugin can only check for updates after its TUI has loaded, so an incompatible cached version cannot update itself.
+The plugin can only check for updates after its TUI has loaded. It only reports newer v1 versions and never removes its own package or cache, so an incompatible cached version cannot update itself.
 
 ### Clear the plugin cache
 

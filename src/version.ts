@@ -12,6 +12,16 @@ export function isVersionAtLeast(version: string, min: string): boolean {
   return true;
 }
 
+export function isSameMajorVersion(a: string, b: string): boolean {
+  const first = parseVersion(a);
+  const second = parseVersion(b);
+  return (
+    first !== undefined &&
+    second !== undefined &&
+    first.parts[0] === second.parts[0]
+  );
+}
+
 export function isVersionNewer(latest: string, current: string) {
   const next = parseVersion(latest);
   const prev = parseVersion(current);
