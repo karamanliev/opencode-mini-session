@@ -2,6 +2,7 @@
 import {
   type InputRenderable,
   type ScrollBoxRenderable,
+  type StyleDefinitionInput,
   SyntaxStyle,
 } from "@opentui/core";
 import { createMemo, Index, Show } from "solid-js";
@@ -22,8 +23,15 @@ import type {
 import { extractAssistantText } from "../session";
 import { ActionButton } from "./ActionButton";
 
-function buildSyntaxStyle(theme: MiniTheme): SyntaxStyle {
-  return SyntaxStyle.fromStyles({
+type SyntaxStyleFactory = {
+  fromStyles(
+    styles: Record<string, StyleDefinitionInput>,
+    owner?: unknown,
+  ): SyntaxStyle;
+};
+
+function buildSyntaxStyle(theme: MiniTheme, owner?: unknown): SyntaxStyle {
+  return (SyntaxStyle as SyntaxStyleFactory).fromStyles({
     // Markdown token styles
     "markup.heading": { fg: theme.markdownHeading, bold: true },
     "markup.strong": { fg: theme.markdownStrong, bold: true },
@@ -46,7 +54,7 @@ function buildSyntaxStyle(theme: MiniTheme): SyntaxStyle {
     type: { fg: theme.syntaxType },
     operator: { fg: theme.syntaxOperator },
     punctuation: { fg: theme.syntaxPunctuation },
-  });
+  }, owner);
 }
 
 type MiniPart =
@@ -83,7 +91,10 @@ const THINKING_SPINNER_FRAMES = [
 
 export function AnswerDialog(props: AnswerDialogProps) {
   const theme = adaptTheme(props.api.theme);
-  const mdSyntaxStyle = buildSyntaxStyle(theme);
+  const mdSyntaxStyle = buildSyntaxStyle(
+    theme,
+    (props.api.renderer as { nativeScene?: unknown }).nativeScene,
+  );
   let scroller: ScrollBoxRenderable | undefined;
   let input: InputRenderable | undefined;
   let inputValue = "";
