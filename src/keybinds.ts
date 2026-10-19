@@ -3,6 +3,7 @@ import {
   CMD_CHANGE_MODEL,
   CMD_CLOSE,
   CMD_CONTINUE,
+  CMD_HANDOFF,
   CMD_HIDE,
   CMD_OPEN,
   CMD_OPEN_FRESH,
@@ -12,9 +13,11 @@ import {
   CMD_SCROLL_DOWN,
   CMD_SCROLL_TOP,
   CMD_SCROLL_UP,
+  CMD_TOGGLE_CONTINUE,
   CMD_TOGGLE_FRESH,
   CMD_TOGGLE_MAIN,
   CMD_TOGGLE_THINKING,
+  HANDOFF_QUESTION,
   SCROLL_LINE_DELTA,
   SCROLL_PAGE_DELTA,
 } from "./constants";
@@ -22,18 +25,42 @@ import type { MiniConfig, MiniMode } from "./types";
 
 export type MiniKeybindActions = {
   config: MiniConfig;
-  isOverlayOpen: () => boolean;
   onSession: () => boolean;
-  triggerMiniMode: (mode: MiniMode, source: "command" | "keybind") => void;
+  triggerMiniMode: (
+    mode: MiniMode,
+    source: "command" | "keybind",
+    initialQuestion?: string,
+    handoff?: boolean,
+  ) => void;
   openModelPicker: () => void;
   hideOverlay: () => void;
   closeOverlay: () => void;
   continueInMainThread: () => void;
+  toggleContinueMode: () => void;
   toggleThinking: () => void;
   changeModelFromPanel: () => void;
   scrollBy: (delta: number) => void;
   scrollTo: (position: number) => void;
 };
+
+export function parseSlashQuestion(
+  input: string | undefined,
+  commandName: string,
+) {
+  const raw = input?.trim();
+  if (!raw) return undefined;
+
+  // Depending on how the host dispatches the slash command, the raw input may
+  // still contain the command itself ("/mini question"); strip it defensively.
+  const question = raw
+    .replace(new RegExp(`^/${commandName}(?:\\s+|$)`, "i"), "")
+    .trim();
+  return question ? question : undefined;
+}
+
+function buildHandoffQuestion(input: string | undefined) {
+  return parseSlashQuestion(input, "mini-handoff") ?? HANDOFF_QUESTION;
+}
 
 export function buildGlobalCommands(
   actions: MiniKeybindActions,
@@ -70,22 +97,30 @@ export function buildGlobalCommands(
     {
       id: CMD_OPEN,
       title: "Mini session",
-      description: "Open a mini session for side questions",
+      description:
+        "Open a mini session for side questions (/mini <question> asks immediately)",
       group: "Mini session",
       palette: true,
-      slash: { name: "mini" },
+      slash: { name: "mini", arguments: true },
       enabled: onSession,
-      run: () => triggerMiniMode("main", "command"),
+      run: (input) =>
+        triggerMiniMode("main", "command", parseSlashQuestion(input, "mini")),
     },
     {
       id: CMD_OPEN_FRESH,
       title: "Mini session (fresh)",
-      description: "Open a mini session without copied context",
+      description:
+        "Open a mini session without copied context (/mini-fresh <question> asks immediately)",
       group: "Mini session",
       palette: true,
-      slash: { name: "mini-fresh" },
+      slash: { name: "mini-fresh", arguments: true },
       enabled: onSession,
-      run: () => triggerMiniMode("fresh", "command"),
+      run: (input) =>
+        triggerMiniMode(
+          "fresh",
+          "command",
+          parseSlashQuestion(input, "mini-fresh"),
+        ),
     },
     {
       id: CMD_CHANGE_MODEL,
@@ -96,6 +131,18 @@ export function buildGlobalCommands(
       slash: { name: "mini-model" },
       enabled: onSession,
       run: () => openModelPicker(),
+    },
+    {
+      id: CMD_HANDOFF,
+      title: "Mini session handoff",
+      description:
+        "Write a handoff document from this session to paste into a new one (/mini-handoff [instructions])",
+      group: "Mini session",
+      palette: true,
+      slash: { name: "mini-handoff", arguments: true },
+      enabled: onSession,
+      run: (input) =>
+        triggerMiniMode("main", "command", buildHandoffQuestion(input), true),
     },
   ];
 }
@@ -133,6 +180,24 @@ export function buildPanelCommands(
       bind: "shift+return",
       run: () => actions.continueInMainThread(),
     },
+    {
+      id: `${CMD_CONTINUE}.fallback`,
+      title: "Continue in main thread (fallback)",
+      group: "Mini session",
+      bind: "alt+c",
+      run: () => actions.continueInMainThread(),
+    },
+    ...(config.continueKeybind
+      ? [
+          {
+            id: CMD_TOGGLE_CONTINUE,
+            title: "Toggle mini continue action",
+            group: "Mini session",
+            bind: config.continueKeybind,
+            run: () => actions.toggleContinueMode(),
+          } satisfies KeymapCommand,
+        ]
+      : []),
     ...(config.toggleThinkingKeybind
       ? [
           {

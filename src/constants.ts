@@ -9,13 +9,14 @@ export const CMD_CLOSE = "mini.close";
 export const CMD_CONTINUE = "mini.continue";
 export const CMD_CHANGE_MODEL = "mini.change-model";
 export const CMD_TOGGLE_THINKING = "mini.toggle-thinking";
+export const CMD_TOGGLE_CONTINUE = "mini.toggle-continue";
 export const CMD_SCROLL_UP = "mini.scroll-up";
 export const CMD_SCROLL_DOWN = "mini.scroll-down";
 export const CMD_PAGE_UP = "mini.page-up";
 export const CMD_PAGE_DOWN = "mini.page-down";
-export const CMD_SUBMIT = "mini.submit";
 export const CMD_SCROLL_TOP = "mini.scroll-top";
 export const CMD_SCROLL_BOTTOM = "mini.scroll-bottom";
+export const CMD_HANDOFF = "mini.handoff";
 
 export const SCROLL_LINE_DELTA = 4;
 export const SCROLL_PAGE_DELTA = 14;
@@ -23,13 +24,40 @@ export const SCROLL_PAGE_DELTA = 14;
 export const DEFAULT_FULL_TOKEN_LIMIT = 50_000;
 export const DEFAULT_KEYBIND = "alt+b";
 export const DEFAULT_FRESH_KEYBIND = "alt+n";
-export const DEFAULT_TOGGLE_THINKING_KEYBIND = "ctrl+t";
+export const DEFAULT_TOGGLE_THINKING_KEYBIND = "alt+t";
+export const DEFAULT_CONTINUE_KEYBIND = "alt+y";
 
-export const SAFE_TOOLS = {
-  read: true,
-  glob: true,
-  grep: true,
-  webfetch: true,
-};
+/**
+ * Permission actions the mini agent may be granted. The list is deliberately
+ * read-only: everything else is denied for plugin-managed mini sessions.
+ * `list` is not a V2 permission action; the `read` tool lists directories.
+ */
+export const MINI_TOOL_ACTIONS = [
+  "read",
+  "glob",
+  "grep",
+  "webfetch",
+  "websearch",
+] as const;
 
-export const DEFAULT_ALLOWED_TOOLS = Object.keys(SAFE_TOOLS);
+export const DEFAULT_ALLOWED_TOOLS: string[] = [
+  "read",
+  "glob",
+  "grep",
+  "webfetch",
+  "websearch",
+];
+
+/** Session metadata marker used to identify ephemeral mini sessions. */
+export const MINI_SESSION_METADATA_KEY = "opencodeMiniSession";
+
+/** Short user-facing question for `/mini-handoff`; the full prompt is internal. */
+export const HANDOFF_QUESTION = "Generate a handoff";
+
+/**
+ * Instructions for `/mini-handoff`: turns the copied session context into a
+ * document that can be pasted into a fresh session. Sent as a system
+ * instruction so the overlay does not display it as the user's message.
+ */
+export const HANDOFF_PROMPT =
+  "You are summarizing an existing work session into a handoff document, so the work can continue in a new session with no memory of this conversation. Write the handoff from the copied session context only; do not investigate the workspace and do not call tools. If the context is empty or insufficient, say so briefly instead of guessing. Produce a concise markdown handoff with: goal and current status, key decisions and why, files/paths/commands involved, verification already done and its result, open questions, and next concrete steps. Reply with the handoff document only, in the same language as the session context; do not add an introduction or a closing comment.";

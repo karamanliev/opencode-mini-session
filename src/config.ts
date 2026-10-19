@@ -1,8 +1,11 @@
 import {
+  DEFAULT_ALLOWED_TOOLS,
+  DEFAULT_CONTINUE_KEYBIND,
   DEFAULT_FRESH_KEYBIND,
   DEFAULT_FULL_TOKEN_LIMIT,
   DEFAULT_KEYBIND,
   DEFAULT_TOGGLE_THINKING_KEYBIND,
+  MINI_TOOL_ACTIONS,
 } from "./constants";
 import type { MiniConfig } from "./types";
 
@@ -27,6 +30,11 @@ export function parseConfig(options: unknown): MiniConfig {
       input.toggleThinkingKeybind,
       DEFAULT_TOGGLE_THINKING_KEYBIND,
     ),
+    tools: parseTools(input.tools),
+    continueKeybind: parseKeybind(
+      input.continueKeybind,
+      DEFAULT_CONTINUE_KEYBIND,
+    ),
   };
 }
 
@@ -46,4 +54,20 @@ function parseKeybind(value: unknown, fallback: string): string | false {
 
 function parseStringOption(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function parseTools(value: unknown): string[] {
+  if (!Array.isArray(value)) return [...DEFAULT_ALLOWED_TOOLS];
+
+  const allowed = new Set<string>(MINI_TOOL_ACTIONS);
+  const tools = [
+    ...new Set(
+      value
+        .filter((tool): tool is string => typeof tool === "string")
+        .map((tool) => tool.trim())
+        .filter((tool) => allowed.has(tool)),
+    ),
+  ];
+
+  return tools;
 }

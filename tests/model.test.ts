@@ -1,6 +1,10 @@
 import type { ModelInfo } from "@opencode/client";
 import { describe, expect, it } from "vitest";
-import { resolveDefaultModel, resolveModelContextWindow } from "../src/model";
+import {
+  resolveDefaultModel,
+  resolveModelContextWindow,
+  resolveModelPreference,
+} from "../src/model";
 import type { SessionEntry } from "../src/types";
 
 function models(): ModelInfo[] {
@@ -19,7 +23,9 @@ function models(): ModelInfo[] {
   ] as unknown as ModelInfo[];
 }
 
-function sessionEntries(): SessionEntry[] {
+function sessionEntries(
+  model = { id: "gpt-5", providerID: "openai", variant: "default" },
+): SessionEntry[] {
   return [
     {
       info: {
@@ -27,7 +33,7 @@ function sessionEntries(): SessionEntry[] {
         type: "assistant",
         time: { created: 0 },
         agent: "build",
-        model: { id: "gpt-5", providerID: "openai", variant: "default" },
+        model,
         content: [],
       },
       parts: [],
@@ -60,16 +66,20 @@ describe("default model resolution", () => {
       models(),
       "anthropic/claude-sonnet-4.6",
       "missing",
-      sessionEntries(),
+      sessionEntries({
+        id: "claude-sonnet-4.6",
+        providerID: "anthropic",
+        variant: "thinking",
+      }),
     );
 
     expect(resolved.source).toBe("session");
     expect(resolved.model).toEqual({
       model: {
-        providerID: "openai",
-        modelID: "gpt-5",
+        providerID: "anthropic",
+        modelID: "claude-sonnet-4.6",
       },
-      variant: "default",
+      variant: "thinking",
     });
     expect(resolved.notice).toContain(
       "Configured mini model anthropic/claude-sonnet-4.6 (missing) was not found.",
@@ -89,6 +99,68 @@ describe("default model resolution", () => {
     expect(resolved.model).toEqual({
       model: { providerID: "anthropic", modelID: "claude-sonnet-4.6" },
     });
+  });
+
+  it.each([
+    { id: "gpt-5", providerID: "openai", variant: "default" },
+    { id: "claude-sonnet-4.6", providerID: "anthropic", variant: "removed" },
+  ])("skips an unavailable historical selection: $id ($variant)", (historical) => {
+    const fallback = {
+      model: { providerID: "anthropic", modelID: "claude-sonnet-4.6" },
+      variant: "fast",
+    };
+    const resolved = resolveDefaultModel(
+      models(),
+      null,
+      null,
+      sessionEntries(historical),
+      fallback,
+    );
+
+    expect(resolved.source).toBe("default");
+    expect(resolved.model).toEqual(fallback);
+  });
+
+  it("validates the historical fallback when the configured model is unavailable", () => {
+    const fallback = {
+      model: { providerID: "anthropic", modelID: "claude-sonnet-4.6" },
+    };
+    const resolved = resolveDefaultModel(
+      models(),
+      "missing/model",
+      null,
+      sessionEntries(),
+      fallback,
+    );
+
+    expect(resolved.source).toBe("default");
+    expect(resolved.model).toEqual(fallback);
+    expect(resolved.notice).toContain(
+      "Configured mini model missing/model was not found.",
+    );
+  });
+
+  it("does not explicitly select an unavailable server default", () => {
+    const resolved = resolveDefaultModel(
+      models(),
+      null,
+      null,
+      sessionEntries(),
+      {
+        model: { providerID: "anthropic", modelID: "claude-sonnet-4.6" },
+        variant: "removed",
+      },
+    );
+
+    expect(resolved.source).toBe("unknown");
+    expect(resolved.model).toEqual({});
+  });
+
+  it("preserves historical selections when the model inventory is unavailable", () => {
+    const resolved = resolveDefaultModel([], null, null, sessionEntries());
+
+    expect(resolved.source).toBe("session");
+    expect(resolved.model.model?.modelID).toBe("gpt-5");
   });
 
   it("resolves a selected model context window from model metadata", () => {
@@ -112,5 +184,43 @@ describe("default model resolution", () => {
         },
       }),
     ).toBeUndefined();
+  });
+});
+
+describe("persisted model preference", () => {
+  const available = {
+    model: { providerID: "anthropic", modelID: "claude-sonnet-4.6" },
+    variant: "fast",
+  };
+
+  it("keeps an available model and variant", () => {
+    expect(resolveModelPreference(models(), available)).toEqual({
+      preference: available,
+    });
+  });
+
+  it("drops a preference whose model was removed", () => {
+    const resolved = resolveModelPreference(models(), {
+      model: { providerID: "openai", modelID: "gpt-5" },
+    });
+
+    expect(resolved.preference).toBeUndefined();
+    expect(resolved.notice).toContain("no longer available");
+  });
+
+  it("drops a preference whose variant was removed", () => {
+    const resolved = resolveModelPreference(models(), {
+      model: { providerID: "anthropic", modelID: "claude-sonnet-4.6" },
+      variant: "missing",
+    });
+
+    expect(resolved.preference).toBeUndefined();
+    expect(resolved.notice).toContain("no longer available");
+  });
+
+  it("keeps the preference when the model list is unavailable", () => {
+    expect(resolveModelPreference([], available)).toEqual({
+      preference: available,
+    });
   });
 });

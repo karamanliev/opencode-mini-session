@@ -14,8 +14,10 @@ export function resolveMiniRouteAction(options: {
   requestedMode: MiniMode;
   activeMode?: MiniMode;
   isVisible?: boolean;
+  forceReopen?: boolean;
 }): MiniRouteAction {
   if (!options.activeMode) return "open";
+  if (options.forceReopen) return "switch";
   if (options.activeMode !== options.requestedMode) return "switch";
   if (options.isVisible === false) return "show";
   return options.source === "keybind" ? "hide" : "show";

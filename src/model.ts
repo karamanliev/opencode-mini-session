@@ -1,5 +1,5 @@
 import type { ModelInfo, ProviderInfo } from "@opencode/client";
-import type { ResolvedModel, SessionEntry } from "./types";
+import type { ModelPreference, ResolvedModel, SessionEntry } from "./types";
 
 export type ModelSource = "config" | "session" | "default" | "unknown";
 
@@ -66,12 +66,45 @@ export function resolveDefaultModel(
     entries,
     fallbackModel,
   );
-  if (resolved.source !== "config") return resolved;
+  if (resolved.source !== "config") {
+    if (
+      models.length === 0 ||
+      !resolved.model.model ||
+      isAvailableModel(models, resolved.model)
+    ) {
+      return resolved;
+    }
+
+    const availableFallback =
+      fallbackModel && isAvailableModel(models, fallbackModel)
+        ? fallbackModel
+        : undefined;
+    return resolveModel(null, null, [], availableFallback);
+  }
   if (isAvailableModel(models, resolved.model)) return resolved;
 
   return {
-    ...resolveModel(null, null, entries, fallbackModel),
-    notice: `Configured mini model ${formatResolvedModel(resolved.model)} was not found. The main session model will be used.`,
+    ...resolveDefaultModel(models, null, null, entries, fallbackModel),
+    notice: `Configured mini model ${formatResolvedModel(resolved.model)} was not found. Falling back to automatic model selection.`,
+  };
+}
+
+/**
+ * A model selected in the picker is persisted across restarts. Providers can
+ * remove models or variants, so verify the saved preference before using it and
+ * fall back to the default model instead of failing every prompt.
+ */
+export function resolveModelPreference(
+  models: ModelInfo[],
+  preference: ModelPreference,
+): { preference: ModelPreference; notice?: string } {
+  if (!preference?.model) return { preference };
+  if (models.length === 0) return { preference };
+  if (isAvailableModel(models, preference)) return { preference };
+
+  return {
+    preference: undefined,
+    notice: `Saved mini model ${formatResolvedModel(preference)} is no longer available. The default model will be used.`,
   };
 }
 
@@ -105,17 +138,4 @@ export function resolveModelContextWindow(
     (candidate) =>
       candidate.providerID === model.providerID && candidate.id === model.modelID,
   )?.limit?.context;
-}
-
-export function formatModelLabel(
-  model: Pick<ModelInfo, "id" | "name"> | undefined,
-  providers: ProviderInfo[],
-  resolved: ResolvedModel,
-) {
-  if (!resolved.model) return "default";
-  const provider = providers.find(
-    (candidate) => candidate.id === resolved.model!.providerID,
-  );
-  const name = provider ? `${provider.name}/${resolved.model.modelID}` : undefined;
-  return name ?? resolved.model.modelID;
 }

@@ -9,18 +9,14 @@ An OpenCode TUI plugin that opens interactive temporary mini sessions for side q
 
 https://github.com/user-attachments/assets/7a668d45-dffc-4311-91fb-1460bf773238
 
-## What it does
+## Highlights
 
-The mini session runs as an overlay alongside the main session without blocking it, so you can ask side questions while the main thread continues working.
-
-Press `alt+b` for the default mini mode, or `alt+n` for a fresh mini mode with no copied conversation context. You can also run `/mini` or `/mini-fresh` from the command palette during any OpenCode session. Type a question in the mini session dialog and send it. The plugin:
-
-1. Gathers context from the current session (token-limited)
-2. Creates a temporary isolated session with that context
-3. Sends your question to the AI and streams the response
-4. Lets you ask follow-up questions in the same mini session
-5. Optionally injects the full mini-session transcript back into the main thread
-6. Deletes the ephemeral session on close
+- **Side questions without blocking the main thread** — `alt+b` or `/mini [question]`
+- **Fresh threads with no copied context** — `alt+n` or `/mini-fresh [question]`
+- **Session handoff** — `/mini-handoff [instructions]` writes a document for a new session and copies it to the clipboard
+- **Streaming answers** with thinking blocks, a model picker, and context/token counters
+- **Read-only by default** — the plugin-managed mini agent only gets `read`, `glob`, `grep`, `webfetch` and `websearch`
+- **Continue your way** — queue the answer into the main session, or copy it to the clipboard
 
 ## Installation
 
@@ -74,20 +70,24 @@ For V1 configuration and troubleshooting, use the [v1 README](https://github.com
 |---|---|
 | `alt+b` (configurable) | Toggle main mini session overlay |
 | `alt+n` (configurable) | Toggle fresh mini session overlay |
-| `/mini` | Open mini session with copied session context |
-| `/mini-fresh` | Open mini session with no copied session context |
+| `/mini [question]` | Open mini session with copied session context, optionally asking immediately |
+| `/mini-fresh [question]` | Open mini session with no copied session context, optionally asking immediately |
+| `/mini-handoff [instructions]` | Write a handoff document from this session (the overlay's **Copy handoff** action copies it) |
 | `/mini-model` | Change model for future mini sessions |
 
 ### Inside the mini session
 
 | Key | Action |
 |---|---|
-| `enter` | Send question / follow-up |
-| `shift+enter` | Continue in the main thread (queues the mini transcript into the session) |
+| `enter` | Send question / follow-up (empty input does nothing) |
+| `alt+c` (or `shift+enter`) | Continue in the main thread, or copy the transcript, depending on the current mode |
+| `alt+y` (configurable) | Switch between **Continue** (queue) and **Copy** (clipboard); the button label updates immediately and the choice is remembered |
 | `alt+b` or `alt+n` (configurable) | Hide overlay, resumable |
-| `ctrl+t` (configurable) | Toggle thinking blocks |
+| `alt+t` (configurable) | Toggle thinking blocks |
 | `tab` | Change the model for the next question |
 | `esc` / `ctrl+c` | Cancel and close |
+
+When a response fails, a **Retry** button re-sends the last question.
 
 ## Configuration
 
@@ -102,7 +102,12 @@ All options are optional. Defaults are shown below.
 | `keybind` | `string \| false` | `"alt+b"` | Main mini-session keybind. Set to `false` or `"none"` to disable. |
 | `freshKeybind` | `string \| false` | `"alt+n"` | Fresh mini-session keybind. Set to `false` or `"none"` to disable. |
 | `enableThinking` | `boolean` | `false` | Show thinking blocks collapsed by default. |
-| `toggleThinkingKeybind` | `string \| false` | `"ctrl+t"` | Thinking toggle keybind inside the mini session. Set to `false` or `"none"` to disable. |
+| `toggleThinkingKeybind` | `string \| false` | `"alt+t"` | Thinking toggle keybind inside the mini session. Set to `false` or `"none"` to disable. |
+| `tools` | `string[]` | `["read","glob","grep","webfetch","websearch"]` | Read-only permission actions available to the plugin-managed mini agent. Supported: `read`, `glob`, `grep`, `webfetch`, `websearch`. Unknown or write-capable actions are ignored. An explicit empty list (or one that filters down to nothing) disables all tools. |
+| `continueKeybind` | `string \| false` | `"alt+y"` | Toggle between queueing the transcript in the main session and copying it to the clipboard (OSC 52) while the overlay is open. Set to `false` or `"none"` to disable. |
+
+The model chosen with `/mini-model`, the thinking toggle and the continue mode are remembered between restarts (per plugin storage). The handoff mode always uses **Copy handoff**; the toggle only applies to regular mini sessions.
+
 
 If you want to customize the plugin, your config should look something like this:
 
@@ -114,11 +119,13 @@ If you want to customize the plugin, your config should look something like this
       "options": {
         "model": "anthropic/claude-sonnet-4.6",
         "variant": "high",
-        "tokenLimit": 10000,
-        "keybind": "alt+m",
-        "freshKeybind": "alt+f",
+        "tokenLimit": 50000,
+        "keybind": "alt+b",
+        "freshKeybind": "alt+n",
         "enableThinking": true,
-        "toggleThinkingKeybind": "alt+a",
+        "toggleThinkingKeybind": "alt+t",
+        "tools": ["read", "glob", "grep", "webfetch", "websearch"],
+        "continueKeybind": "alt+y",
         "agent": "build"
       }
     }
@@ -128,7 +135,7 @@ If you want to customize the plugin, your config should look something like this
 
 ## Agents and permissions
 
-If `agent` is not set or is invalid, mini uses a plugin managed custom mini agent with read only permissions: `read`, `glob`, `grep`, and `webfetch`.
+If `agent` is not set or is invalid, mini uses a plugin managed custom mini agent with read only permissions: `read`, `glob`, `grep`, `webfetch` and `websearch`. Everything else stays denied, and the mini system prompt tells the model to prefer `read` for files it can name. Setting `tools` to an explicit empty list denies every tool, including the read actions.
 
 To customize permissions, tone, instructions, or other behavior, set `agent` to an existing OpenCode agent name. The plugin will use that agent's settings directly.
 
@@ -161,7 +168,23 @@ Oldest messages are dropped to fit the `tokenLimit`, and the result is injected 
 
 Fresh mini mode skips this copied-context step entirely.
 
+## Session handoff
+
+`/mini-handoff` turns the current session into a handoff document for a new session. It opens the mini overlay with the copied session context and asks the model to produce a concise markdown handoff: goal and status, decisions, files and commands, verification done, open questions, and next steps.
+
+- Add extra instructions after the command, for example `/mini-handoff focus on the migration work`. 
+- Pressing **Copy handoff** (`shift+enter` or `alt+c`) copies only the last assistant answer (the document itself, without the question or transcript) through the terminal clipboard.
+- Refine the document with follow-up questions in the same overlay, then copy the final version.
+
 ## Troubleshooting
+
+### Update the plugin
+
+The plugin checks the npm registry on startup and shows any newer version with the update command. Apply it with:
+
+```sh
+opencode plugin update opencode-mini-session
+```
 
 ### Refresh the plugin
 
@@ -171,6 +194,18 @@ If `/mini` is missing or the TUI does not load after updating OpenCode, close Op
 opencode plugin remove opencode-mini-session
 opencode plugin add opencode-mini-session
 opencode
+```
+
+### `Invalid V2 TUI plugin module`
+
+The installed package is the 1.x release, which targets OpenCode 1. Install the 2.x release (see [Installation](#installation)) and restart OpenCode.
+
+### Git package installs are refused
+
+npm 12 disables packages fetched from Git by default (`allow-git=none`). Enable them before installing a `github:...` or `git+https://...` spec:
+
+```sh
+npm config set allow-git all
 ```
 
 ### Clear the plugin cache

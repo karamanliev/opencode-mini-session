@@ -13,19 +13,23 @@ import {
   type ResolvedMiniAgent,
 } from "./agent";
 import { buildCopiedContext, getSessionEntries } from "./context";
+import { HANDOFF_PROMPT, MINI_SESSION_METADATA_KEY } from "./constants";
 import { getErrorMessage } from "./diagnostics";
 import {
   resolveDefaultModel,
   formatResolvedModel,
   resolveModelContextWindow,
-  type ModelSource,
+  resolveModelPreference,
 } from "./model";
 import { getCurrentRoute, type TuiContext } from "./opencode";
 import type {
   ActiveDialog,
   AnswerDialogState,
+  ContinueAction,
+  ContinuePreferenceState,
   MiniConfig,
   MiniMode,
+  ModelPreference,
   ModelPreferenceState,
   OverlayState,
   ResolvedModel,
@@ -41,23 +45,82 @@ type ModelSelectValue =
     };
 
 type ErrorPath =
+  | "session.instructions throw"
   | "session.prompt throw"
   | "session.execution.failed event"
   | "session.create throw";
 
 const SYSTEM_INSTRUCTION_KEY = "mini.system";
 
-export function openMiniSession(
-  ctx: TuiContext,
-  config: MiniConfig,
-  mode: MiniMode,
-  setOverlay: Setter<OverlayState | undefined>,
-  active: ActiveDialog,
-  modelPreference: ModelPreferenceState,
-  thinkingPreference: ThinkingPreferenceState,
-  openPickerFn: (onAfterSelect: () => void) => void,
-  getUpdateWarning?: () => string | undefined,
-): boolean {
+/**
+ * The server rejects instruction entries larger than 256 KiB. Keep the
+ * instruction below that limit while preserving the system preamble, the
+ * context delimiters and the newest session messages.
+ */
+export const MAX_INSTRUCTION_BYTES = 250_000;
+
+const TRUNCATION_NOTICE =
+  "[Older session context truncated to fit the instruction limit.]";
+
+export function clampContextText(context: string, maxBytes: number): string {
+  if (maxBytes <= 0) return "";
+  if (utf8Bytes(context) <= maxBytes) return context;
+
+  const notice = `${TRUNCATION_NOTICE}\n\n`;
+  const noticeBytes = utf8Bytes(notice);
+  if (noticeBytes >= maxBytes) return takeUtf8Tail(notice, maxBytes);
+
+  const budget = maxBytes - noticeBytes;
+  const chunks = context.split("\n\n");
+  const kept: string[] = [];
+  let usedBytes = 0;
+
+  for (let index = chunks.length - 1; index >= 0; index -= 1) {
+    const chunk = chunks[index];
+    const separatorBytes = kept.length > 0 ? 2 : 0;
+    const chunkBytes = utf8Bytes(chunk) + separatorBytes;
+    if (kept.length > 0 && usedBytes + chunkBytes > budget) break;
+    kept.push(chunk);
+    usedBytes += chunkBytes;
+  }
+
+  const text = kept.reverse().join("\n\n");
+  const tail = utf8Bytes(text) > budget ? takeUtf8Tail(text, budget) : text;
+  return `${notice}${tail}`;
+}
+
+function utf8Bytes(value: string) {
+  return new TextEncoder().encode(value).length;
+}
+
+function takeUtf8Tail(value: string, maxBytes: number) {
+  if (maxBytes <= 0) return "";
+  const bytes = new TextEncoder().encode(value);
+  if (bytes.length <= maxBytes) return value;
+  let start = bytes.length - maxBytes;
+  while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) start += 1;
+  return new TextDecoder().decode(bytes.slice(start));
+}
+
+export type MiniSessionOptions = {
+  ctx: TuiContext;
+  config: MiniConfig;
+  mode: MiniMode;
+  sessionID: string;
+  setOverlay: Setter<OverlayState | undefined>;
+  active: ActiveDialog;
+  modelPreference: ModelPreferenceState;
+  thinkingPreference: ThinkingPreferenceState;
+  continuePreference: ContinuePreferenceState;
+  openPickerFn: (onAfterSelect: () => void) => void;
+  getUpdateWarning?: () => string | undefined;
+  initialQuestion?: string;
+  handoff?: boolean;
+  isDisposed?: () => boolean;
+};
+
+export function openMiniSession(options: MiniSessionOptions): boolean {
+  const { ctx, active } = options;
   const route = getCurrentRoute(ctx);
 
   if (route.kind !== "session") {
@@ -74,8 +137,12 @@ export function openMiniSession(
     return false;
   }
 
-  const sessionID = route.sessionID;
-  void startQuestion(
+  void startQuestion({ ...options, sessionID: route.sessionID });
+  return true;
+}
+
+export async function startQuestion(options: MiniSessionOptions) {
+  const {
     ctx,
     config,
     mode,
@@ -84,30 +151,21 @@ export function openMiniSession(
     active,
     modelPreference,
     thinkingPreference,
+    continuePreference,
     openPickerFn,
     getUpdateWarning,
-  );
-  return true;
-}
-
-export async function startQuestion(
-  ctx: TuiContext,
-  config: MiniConfig,
-  mode: MiniMode,
-  sessionID: string,
-  setOverlay: Setter<OverlayState | undefined>,
-  active: ActiveDialog,
-  modelPreference: ModelPreferenceState,
-  thinkingPreference: ThinkingPreferenceState,
-  openPickerFn: (onAfterSelect: () => void) => void,
-  getUpdateWarning?: () => string | undefined,
-) {
+    initialQuestion,
+    handoff,
+    isDisposed,
+  } = options;
+  const disposed = () => closed || isDisposed?.() === true;
   const [messages, models, providers, defaultModelResult] = await Promise.all([
     fetchSessionMessages(ctx, sessionID),
     fetchModels(ctx),
     fetchProviders(ctx),
     fetchDefaultModel(ctx),
   ]);
+  if (isDisposed?.()) return;
   const entries = getSessionEntries(messages);
   const copiedContext =
     mode === "main"
@@ -121,15 +179,36 @@ export async function startQuestion(
     entries,
     defaultModelResult,
   );
+  const modelPreferenceResolution = resolveModelPreference(
+    models,
+    modelPreference.get(),
+  );
+  if (modelPreferenceResolution.notice) modelPreference.set(undefined);
   const getResolvedModel = () =>
     modelPreference.get() ?? defaultResolvedModel.model;
   const getModelName = () => formatResolvedModel(getResolvedModel());
   const hideKey = mode === "fresh" ? config.freshKeybind : config.keybind;
   const hiddenCommand = mode === "fresh" ? "/mini-fresh" : "/mini";
-  const title = mode === "fresh" ? "mini fresh" : "mini session";
+  const handoffMode = handoff === true;
+  const title = handoffMode
+    ? "mini handoff"
+    : mode === "fresh"
+      ? "mini fresh"
+      : "mini session";
+  let continueMode: ContinueAction = continuePreference.get();
+  const getContinueLabel = () =>
+    handoffMode
+      ? "Copy handoff"
+      : continueMode === "clipboard"
+        ? "Copy"
+        : "Continue";
+  const getContinueMode = (): ContinueAction =>
+    handoffMode ? "clipboard" : continueMode;
   const previousFocus = ctx.renderer.currentFocusedRenderable;
   let resolvedAgent: ResolvedMiniAgent;
   let system = "";
+  let handoffInstructionsAttached = false;
+  let lastPrompt: string | undefined;
 
   const dialogState: AnswerDialogState = {
     mode,
@@ -351,15 +430,58 @@ export async function startQuestion(
   };
 
   const continueInMainThread = async () => {
-    const transcript = buildMiniSessionTranscript(dialogState);
-    if (continuing || dialogState.loading || dialogState.error || !transcript)
+    if (continuing) return;
+    if (dialogState.loading) {
+      ctx.ui.toast.show({
+        variant: "warning",
+        message: "Wait for the response to finish.",
+      });
       return;
+    }
+    const transcript = buildMiniSessionTranscript(dialogState);
+    const handoffText = handoffMode
+      ? extractLastAssistantText(dialogState.entries)
+      : "";
+    const text = handoffMode ? handoffText : buildContinuePrompt(transcript);
+    const hasText = handoffMode
+      ? Boolean(handoffText.trim())
+      : Boolean(transcript.trim());
+    if (!hasText) {
+      if (handoffMode) {
+        ctx.ui.toast.show({
+          variant: "warning",
+          message: "No handoff document yet.",
+        });
+      }
+      return;
+    }
+    if (!handoffMode && dialogState.error) return;
     continuing = true;
 
     try {
+      if (getContinueMode() === "clipboard") {
+        if (!copyTextToClipboard(ctx, text)) {
+          ctx.ui.toast.show({
+            variant: "error",
+            message: handoffMode
+              ? "Clipboard is not supported by this terminal; the handoff was not copied."
+              : "Clipboard is not supported by this terminal; the side answer was not copied.",
+          });
+          return;
+        }
+        ctx.ui.toast.show({
+          variant: "success",
+          message: handoffMode
+            ? "Handoff copied to clipboard."
+            : "Side answer copied to clipboard.",
+        });
+        await cleanup();
+        return;
+      }
+
       await ctx.client.session.prompt({
         sessionID,
-        text: buildContinuePrompt(transcript),
+        text,
         delivery: "queue",
       });
       ctx.ui.toast.show({
@@ -377,6 +499,27 @@ export async function startQuestion(
     }
   };
 
+  const retryLastPrompt = () => {
+    if (closed || dialogState.loading) return;
+    if (!lastPrompt) {
+      ctx.ui.toast.show({
+        variant: "warning",
+        message: "Nothing to retry yet. Close and reopen the mini session.",
+      });
+      return;
+    }
+    if (!tempSessionID) {
+      ctx.ui.toast.show({
+        variant: "warning",
+        message: "mini session is still opening.",
+      });
+      return;
+    }
+    dialogState.error = undefined;
+    dialogState.errorDetail = undefined;
+    submitPrompt(lastPrompt);
+  };
+
   const toggleThinking = () => {
     dialogState.thinkingEnabled = !dialogState.thinkingEnabled;
     thinkingPreference.set(dialogState.thinkingEnabled);
@@ -390,6 +533,13 @@ export async function startQuestion(
     } else {
       dialogState.expandedThinkingPartIDs[partID] = true;
     }
+    renderOverlay();
+  };
+
+  const toggleContinueMode = () => {
+    if (closed || handoffMode) return;
+    continueMode = continueMode === "clipboard" ? "queue" : "clipboard";
+    continuePreference.set(continueMode);
     renderOverlay();
   };
 
@@ -421,6 +571,8 @@ export async function startQuestion(
       modelName: getModelName(),
       hideKey,
       toggleThinkingKeybind: config.toggleThinkingKeybind,
+      continueLabel: getContinueLabel(),
+      continueOnError: handoffMode,
       state: dialogState,
       onScroller: (scroller) => {
         overlayScroller = scroller;
@@ -431,6 +583,8 @@ export async function startQuestion(
       onHide: () => hide(),
       onClose: () => void closeFromUser(),
       onContinue: () => void continueInMainThread(),
+      onRetry: retryLastPrompt,
+      onToggleContinue: toggleContinueMode,
       onChangeModel: () =>
         openPickerFn(() => renderOverlay({ focusInput: true })),
       onToggleThinking: toggleThinking,
@@ -491,15 +645,32 @@ export async function startQuestion(
     return;
   }
 
-  if (closed) return;
-  system = buildMiniSystemPrompt(
-    context,
-    resolvedAgent,
-    mode,
-    ctx.location?.directory,
-  );
+  if (disposed()) return;
+  const buildSystemPrompt = (contextText: string) => {
+    const base = buildMiniSystemPrompt(
+      contextText,
+      resolvedAgent,
+      mode,
+      ctx.location?.directory,
+    );
+    return handoffMode ? `${base}\n\n${HANDOFF_PROMPT}` : base;
+  };
+  system = buildSystemPrompt(context);
+  if (utf8Bytes(system) > MAX_INSTRUCTION_BYTES) {
+    const base = buildSystemPrompt("");
+    const head = "\n\n<session-context>\n";
+    const tail = "\n</session-context>";
+    const budget =
+      MAX_INSTRUCTION_BYTES -
+      utf8Bytes(base) -
+      utf8Bytes(head) -
+      utf8Bytes(tail);
+    const clampedContext = clampContextText(context, budget);
+    system = clampedContext ? buildSystemPrompt(clampedContext) : base;
+  }
   dialogState.notice = formatMiniNotice(
     defaultResolvedModel.notice,
+    modelPreferenceResolution.notice,
     ...resolvedAgent.notices,
   );
   renderOverlay();
@@ -524,6 +695,7 @@ export async function startQuestion(
     const promptSessionID = tempSessionID;
     const generation = ++submissionGeneration;
     clearRefreshTimer();
+    lastPrompt = prompt;
 
     dialogState.error = undefined;
     dialogState.errorDetail = undefined;
@@ -532,12 +704,20 @@ export async function startQuestion(
     dialogState.spinnerFrame = 0;
     followStreamingToBottom = true;
     forceScrollToBottom = true;
-    submissionModelQueue.push(getModelName());
-
     renderOverlay({ focusInput: true });
 
     void (async () => {
       try {
+        if (handoffMode && !handoffInstructionsAttached) {
+          await ctx.client.session.instructions.entry.put({
+            sessionID: promptSessionID,
+            key: SYSTEM_INSTRUCTION_KEY,
+            value: system,
+          });
+          handoffInstructionsAttached = true;
+          if (disposed() || generation !== submissionGeneration) return;
+        }
+        submissionModelQueue.push(getModelName());
         const resolvedModel = getResolvedModel();
         const nextModelKey = formatSessionModelKey(resolvedModel);
         if (nextModelKey !== sessionModelKey) {
@@ -559,7 +739,12 @@ export async function startQuestion(
         );
       } catch (cause) {
         if (closed || generation !== submissionGeneration) return;
-        setPromptError("session.prompt throw", cause);
+        setPromptError(
+          handoffMode && !handoffInstructionsAttached
+            ? "session.instructions throw"
+            : "session.prompt throw",
+          cause,
+        );
         renderOverlay();
       }
     })();
@@ -571,6 +756,7 @@ export async function startQuestion(
     const created = await ctx.client.session.create(
       buildMiniSessionCreatePayload(resolvedAgent, {
         title: "mini session",
+        metadata: { [MINI_SESSION_METADATA_KEY]: true },
         ...(ctx.location?.directory
           ? { location: { directory: ctx.location.directory } }
           : {}),
@@ -590,7 +776,7 @@ export async function startQuestion(
     tempSessionID = created.id;
     const ephemeralSessionID = tempSessionID;
 
-    if (system.trim()) {
+    if (system.trim() && !handoffMode) {
       try {
         await ctx.client.session.instructions.entry.put({
           sessionID: ephemeralSessionID,
@@ -688,7 +874,7 @@ export async function startQuestion(
         .catch(() => {});
     };
 
-    if (closed) {
+    if (disposed()) {
       try {
         await ctx.client.session.remove({ sessionID: ephemeralSessionID });
       } catch {}
@@ -727,6 +913,10 @@ export async function startQuestion(
         );
       }),
     );
+
+    if (initialQuestion) {
+      submitPrompt(initialQuestion);
+    }
   } catch (cause) {
     if (closed) return;
     setPromptError("session.create throw", cause);
@@ -765,11 +955,13 @@ export function openModelPicker(
         defaultModel,
         defaultModelResult,
       );
+      const current = findCurrentModelValue(options, modelPreference.get());
 
       const selected = await ctx.ui.dialog.select<ModelSelectValue>({
         title: "Mini session model",
         placeholder: "Select model for future mini-session questions",
         options,
+        ...(current ? { current } : {}),
       });
 
       if (selected === undefined) return;
@@ -802,6 +994,24 @@ export function openModelPicker(
       onOpenChange?.(false);
     }
   })();
+}
+
+function findCurrentModelValue(
+  options: { value: ModelSelectValue }[],
+  preference: ModelPreference,
+): ModelSelectValue | undefined {
+  const model = preference?.model;
+  if (!model) {
+    return options.find((option) => option.value.type === "default")?.value;
+  }
+
+  return options.find(
+    (option) =>
+      option.value.type === "model" &&
+      option.value.model.providerID === model.providerID &&
+      option.value.model.modelID === model.modelID &&
+      (option.value.variant ?? undefined) === (preference?.variant ?? undefined),
+  )?.value;
 }
 
 function buildModelOptions(
@@ -886,6 +1096,22 @@ export function extractAssistantText(
   return chunks.join("\n\n").trim();
 }
 
+export function extractLastAssistantText(
+  entries: AnswerDialogState["entries"],
+): string {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (entry.info.type !== "assistant") continue;
+    const text = entry.parts
+      .map((part) => (part.type === "text" ? part.text : ""))
+      .filter(Boolean)
+      .join("\n\n")
+      .trim();
+    if (text) return text;
+  }
+  return "";
+}
+
 function buildMiniSessionTranscript(state: AnswerDialogState) {
   const lines: string[] = [];
 
@@ -932,6 +1158,18 @@ function getAssistantInputTokens(tokens: {
 function formatSessionModelKey(resolved: ResolvedModel) {
   if (!resolved.model) return "";
   return `${resolved.model.providerID}/${resolved.model.modelID}${resolved.variant ? `#${resolved.variant}` : ""}`;
+}
+
+export function copyTextToClipboard(ctx: TuiContext, text: string): boolean {
+  const renderer = ctx.renderer as {
+    isOsc52Supported?: () => boolean;
+    copyToClipboardOSC52?: (value: string) => boolean;
+  };
+  if (typeof renderer.isOsc52Supported === "function" && !renderer.isOsc52Supported()) {
+    return false;
+  }
+  if (typeof renderer.copyToClipboardOSC52 !== "function") return false;
+  return renderer.copyToClipboardOSC52(text);
 }
 
 async function fetchSessionMessages(

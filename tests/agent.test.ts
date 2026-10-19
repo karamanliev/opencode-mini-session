@@ -20,7 +20,9 @@ function config(overrides: Partial<MiniConfig> = {}): MiniConfig {
     keybind: "alt+b",
     freshKeybind: "alt+n",
     enableThinking: false,
-    toggleThinkingKeybind: "ctrl+t",
+    toggleThinkingKeybind: "alt+t",
+    tools: [...DEFAULT_ALLOWED_TOOLS],
+    continueKeybind: "alt+y",
     ...overrides,
   };
 }
@@ -81,7 +83,10 @@ describe("config parsing", () => {
   });
 
   it("parses thinking keybind values", () => {
-    expect(parseConfig({}).toggleThinkingKeybind).toBe("ctrl+t");
+    expect(parseConfig({}).toggleThinkingKeybind).toBe("alt+t");
+    expect(
+      parseConfig({ toggleThinkingKeybind: "ctrl+t" }).toggleThinkingKeybind,
+    ).toBe("ctrl+t");
     expect(
       parseConfig({ toggleThinkingKeybind: " ctrl+r " }).toggleThinkingKeybind,
     ).toBe("ctrl+r");
@@ -103,6 +108,53 @@ describe("config parsing", () => {
     expect(parseConfig({ freshKeybind: " alt+f " }).freshKeybind).toBe("alt+f");
     expect(parseConfig({ freshKeybind: false }).freshKeybind).toBe(false);
     expect(parseConfig({ freshKeybind: "none" }).freshKeybind).toBe(false);
+  });
+
+  it("parses tools with a read-only whitelist", () => {
+    expect(parseConfig({}).tools).toEqual([
+      "read",
+      "glob",
+      "grep",
+      "webfetch",
+      "websearch",
+    ]);
+    expect(parseConfig({}).tools).toEqual(DEFAULT_ALLOWED_TOOLS);
+    expect(parseConfig({ tools: ["read", "websearch"] }).tools).toEqual([
+      "read",
+      "websearch",
+    ]);
+    expect(
+      parseConfig({ tools: ["read", "read", "websearch", "bogus"] }).tools,
+    ).toEqual(["read", "websearch"]);
+    expect(parseConfig({ tools: ["edit", "shell"] }).tools).toEqual([]);
+    expect(parseConfig({ tools: [] }).tools).toEqual([]);
+    expect(parseConfig({ tools: "read" }).tools).toEqual(DEFAULT_ALLOWED_TOOLS);
+  });
+
+  it("parses model and tokenLimit values", () => {
+    expect(parseConfig({}).model).toBeNull();
+    expect(parseConfig({ model: " anthropic/claude " }).model).toBe(
+      "anthropic/claude",
+    );
+    expect(parseConfig({ model: 123 }).model).toBeNull();
+    expect(parseConfig({}).tokenLimit).toBe(50_000);
+    expect(parseConfig({ tokenLimit: 1234.9 }).tokenLimit).toBe(1234);
+    expect(parseConfig({ tokenLimit: -5 }).tokenLimit).toBe(50_000);
+    expect(parseConfig({ tokenLimit: "100" }).tokenLimit).toBe(50_000);
+  });
+
+  it("parses the continue mode keybind", () => {
+    expect(parseConfig({}).continueKeybind).toBe("alt+y");
+    expect(parseConfig({ continueKeybind: "ctrl+y" }).continueKeybind).toBe(
+      "ctrl+y",
+    );
+    expect(parseConfig({ continueKeybind: " ctrl+u " }).continueKeybind).toBe(
+      "ctrl+u",
+    );
+    expect(parseConfig({ continueKeybind: false }).continueKeybind).toBe(false);
+    expect(parseConfig({ continueKeybind: "none" }).continueKeybind).toBe(
+      false,
+    );
   });
 });
 
@@ -162,9 +214,34 @@ describe("plugin-managed permissions", () => {
     for (const action of DEFAULT_ALLOWED_TOOLS) {
       expect(effectFor(resolved.permission, action)).toBe("allow");
     }
-    for (const action of ["edit", "shell", "subagent", "websearch"]) {
+    expect(effectFor(resolved.permission, "websearch")).toBe("allow");
+    for (const action of ["edit", "shell", "subagent"]) {
       expect(effectFor(resolved.permission, action)).toBe("deny");
     }
+  });
+
+  it("denies every tool when the allowlist is explicitly empty", () => {
+    const resolved = asPluginManaged(resolveMiniAgent(config({ tools: [] }), []));
+
+    expect(effectFor(resolved.permission, "read")).toBe("deny");
+    expect(effectFor(resolved.permission, "websearch")).toBe("deny");
+    const prompt = buildMiniSystemPrompt("", resolved);
+    expect(prompt).toContain("No tools are available in this mini session.");
+    expect(prompt).not.toContain("You may only use the following tools");
+  });
+
+  it("uses configured tools for permissions and system prompts", () => {
+    const resolved = asPluginManaged(
+      resolveMiniAgent(config({ tools: ["read", "websearch"] }), []),
+    );
+
+    expect(effectFor(resolved.permission, "read")).toBe("allow");
+    expect(effectFor(resolved.permission, "websearch")).toBe("allow");
+    expect(effectFor(resolved.permission, "glob")).toBe("deny");
+
+    const prompt = buildMiniSystemPrompt("", resolved);
+    expect(prompt).toContain("You may only use the following tools: read, websearch");
+    expect(prompt).not.toContain("webfetch");
   });
 });
 
