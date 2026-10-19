@@ -5,16 +5,21 @@ import { parseConfig } from "./config";
 import { PLUGIN_ID } from "./constants";
 import type { MiniKeybindActions } from "./keybinds";
 import { getCurrentRoute } from "./opencode";
+import { fallbackRecapTerm, parseRecapQuery } from "./recap";
 import { resolveMiniRouteAction, runMiniRouteAction } from "./routing";
 import { openMiniSession, openModelPicker } from "./session";
-import { startAutoUpdate } from "./update";
 import type {
   ActiveDialogController,
+  ContinueAction,
+  ContinuePreferenceState,
   MiniMode,
-  ModelPreference,
+  ModelPreferenceState,
   OverlayState,
+  RecapQuery,
+  ResolvedModel,
   ThinkingPreferenceState,
 } from "./types";
+import { startAutoUpdate } from "./update";
 
 export default Plugin.define({
   id: PLUGIN_ID,
@@ -24,35 +29,91 @@ export default Plugin.define({
       undefined,
       { equals: false },
     );
-    const [selectedModel, setSelectedModel] = createSignal<ModelPreference>(
-      undefined,
-      { equals: false },
-    );
-    const [thinkingEnabled, setThinkingEnabled] = createSignal(
-      config.enableThinking,
-    );
     const [originSessionID, setOriginSessionID] = createSignal<
       string | undefined
     >(undefined);
     const [updateWarning, setUpdateWarning] = createSignal<
       string | undefined
     >(undefined);
+    const [preferences, updatePreferences] = ctx.storage.store("preferences", {
+      initial: {
+        model: null as ResolvedModel | null,
+        thinking: config.enableThinking,
+        continueMode: "queue" as ContinueAction,
+      },
+    });
     let activeDialog: ActiveDialogController | undefined;
     let activeMode: MiniMode | undefined;
+    let disposed = false;
     const modelPickerOpen = { value: false };
-    const thinkingPreference: ThinkingPreferenceState = {
-      get: thinkingEnabled,
-      set: setThinkingEnabled,
+
+    // A persisted store update is asynchronous. Keep the selection in a local
+    // signal so the picker callback can rerender the model label immediately.
+    const [modelPreferenceValue, setModelPreferenceValue] = createSignal<
+      ResolvedModel | undefined
+    >(preferences.model ?? undefined);
+    const modelPreference: ModelPreferenceState = {
+      get: () => modelPreferenceValue(),
+      set: (model) => {
+        setModelPreferenceValue(model ?? undefined);
+        void updatePreferences((draft) => {
+          draft.model = model ?? null;
+        });
+      },
     };
+    createEffect(() => {
+      setModelPreferenceValue(preferences.model ?? undefined);
+    });
+    const thinkingPreference: ThinkingPreferenceState = {
+      get: () => preferences.thinking,
+      set: (enabled) => {
+        void updatePreferences((draft) => {
+          draft.thinking = enabled;
+        });
+      },
+    };
+    const [continueModeValue, setContinueModeValue] =
+      createSignal<ContinueAction>(
+        preferences.continueMode === "clipboard" ? "clipboard" : "queue",
+      );
+    const continuePreference: ContinuePreferenceState = {
+      get: () => continueModeValue(),
+      set: (mode) => {
+        setContinueModeValue(mode);
+        void updatePreferences((draft) => {
+          draft.continueMode = mode;
+        });
+      },
+    };
+    createEffect(() => {
+      setContinueModeValue(
+        preferences.continueMode === "clipboard" ? "clipboard" : "queue",
+      );
+    });
+
     const updateController = new AbortController();
     startAutoUpdate(ctx, setUpdateWarning, updateController.signal);
 
     const actions: MiniKeybindActions = {
       config,
-      isOverlayOpen: () => Boolean(overlay()),
       onSession: () => getCurrentRoute(ctx).kind === "session",
-      triggerMiniMode: (mode, source) => {
-        void triggerMiniMode(mode, source);
+      triggerMiniMode: (mode, source, initialQuestion, handoff, recap) => {
+        void triggerMiniMode(mode, source, initialQuestion, handoff, recap);
+      },
+      triggerRecap: (input) => {
+        const route = getCurrentRoute(ctx);
+        if (route.kind !== "session") return;
+        const query = parseRecapQuery(
+          input,
+          fallbackRecapTerm(ctx.location?.directory),
+        );
+        void triggerMiniMode(
+          "recap",
+          "command",
+          `Recap "${query.term}"`,
+          false,
+          query,
+        );
       },
       openModelPicker: () => {
         const route = getCurrentRoute(ctx);
@@ -69,6 +130,7 @@ export default Plugin.define({
         }
       },
       continueInMainThread: () => overlay()?.onContinue(),
+      toggleContinueMode: () => overlay()?.onToggleContinue(),
       toggleThinking: () => overlay()?.onToggleThinking(),
       changeModelFromPanel: () => {
         modelPickerOpen.value = true;
@@ -114,7 +176,7 @@ export default Plugin.define({
         ctx,
         config,
         sessionID,
-        { get: selectedModel, set: setSelectedModel },
+        modelPreference,
         onAfterSelect,
         (open) => {
           modelPickerOpen.value = open;
@@ -125,6 +187,9 @@ export default Plugin.define({
     async function triggerMiniMode(
       mode: MiniMode,
       source: "command" | "keybind",
+      initialQuestion?: string,
+      handoff?: boolean,
+      recap?: RecapQuery,
     ) {
       const route = getCurrentRoute(ctx);
       if (route.kind !== "session") return;
@@ -134,18 +199,20 @@ export default Plugin.define({
         requestedMode: mode,
         activeMode,
         isVisible: activeDialog?.isVisible(),
+        forceReopen: handoff === true || recap !== undefined,
       });
 
       await runMiniRouteAction({
         action: nextAction,
         activeDialog,
         open: () => {
-          const opened = openMiniSession(
+          const opened = openMiniSession({
             ctx,
             config,
             mode,
+            sessionID,
             setOverlay,
-            {
+            active: {
               get: () => activeDialog,
               set: (dialog) => {
                 activeDialog = dialog;
@@ -155,20 +222,31 @@ export default Plugin.define({
                 }
               },
             },
-            { get: selectedModel, set: setSelectedModel },
+            modelPreference,
             thinkingPreference,
-            (onAfterSelect) => openPicker(sessionID, onAfterSelect),
-            () => updateWarning(),
-          );
+            continuePreference,
+            openPickerFn: (onAfterSelect) =>
+              openPicker(sessionID, onAfterSelect),
+            getUpdateWarning: () => updateWarning(),
+            initialQuestion,
+            handoff,
+            recap,
+            isDisposed: () => disposed,
+          });
           if (opened) {
             setOriginSessionID(sessionID);
             activeMode = mode;
           }
         },
       });
+
+      if (initialQuestion && nextAction !== "open") {
+        overlay()?.onSubmit(initialQuestion);
+      }
     }
 
     return () => {
+      disposed = true;
       updateController.abort();
       unregisterSlot();
       void activeDialog?.close();

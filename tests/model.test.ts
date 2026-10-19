@@ -1,6 +1,10 @@
 import type { ModelInfo } from "@opencode/client";
 import { describe, expect, it } from "vitest";
-import { resolveDefaultModel, resolveModelContextWindow } from "../src/model";
+import {
+  resolveDefaultModel,
+  resolveModelContextWindow,
+  resolveModelPreference,
+} from "../src/model";
 import type { SessionEntry } from "../src/types";
 
 function models(): ModelInfo[] {
@@ -112,5 +116,43 @@ describe("default model resolution", () => {
         },
       }),
     ).toBeUndefined();
+  });
+});
+
+describe("persisted model preference", () => {
+  const available = {
+    model: { providerID: "anthropic", modelID: "claude-sonnet-4.6" },
+    variant: "fast",
+  };
+
+  it("keeps an available model and variant", () => {
+    expect(resolveModelPreference(models(), available)).toEqual({
+      preference: available,
+    });
+  });
+
+  it("drops a preference whose model was removed", () => {
+    const resolved = resolveModelPreference(models(), {
+      model: { providerID: "openai", modelID: "gpt-5" },
+    });
+
+    expect(resolved.preference).toBeUndefined();
+    expect(resolved.notice).toContain("no longer available");
+  });
+
+  it("drops a preference whose variant was removed", () => {
+    const resolved = resolveModelPreference(models(), {
+      model: { providerID: "anthropic", modelID: "claude-sonnet-4.6" },
+      variant: "missing",
+    });
+
+    expect(resolved.preference).toBeUndefined();
+    expect(resolved.notice).toContain("no longer available");
+  });
+
+  it("keeps the preference when the model list is unavailable", () => {
+    expect(resolveModelPreference([], available)).toEqual({
+      preference: available,
+    });
   });
 });
