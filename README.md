@@ -185,7 +185,7 @@ Fresh mini mode skips this copied-context step entirely.
 
 ### Update the plugin
 
-The plugin checks the npm registry on startup and shows any newer version. For installs in `opencode.jsonc`, open `/plugins`, select the **Server** entry for `opencode-mini-session`, and use the update action. The TUI entry only controls enabling and disabling the UI. Existing CLI-only installs can run `/mini-migrate` to enable managed TUI updates.
+The plugin checks the npm registry on startup and shows any newer version. For installs in `opencode.jsonc`, open `/plugins`, select the plugin entry for `opencode-mini-session`, and use the update action. The TUI entry only controls enabling and disabling the UI. Existing CLI-only installs can run `/mini-migrate` to enable managed TUI updates.
 
 Alternatively, run this in your terminal:
 
