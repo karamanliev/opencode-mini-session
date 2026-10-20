@@ -1,11 +1,12 @@
 {
   "name": "opencode-mini-session",
-  "version": "2.1.0",
+  "version": "2.2.0-beta.1",
   "type": "module",
   "engines": {
     "opencode": ">=2"
   },
   "exports": {
+    ".": "./dist/server.js",
     "./tui": "./dist/index.js"
   },
   "files": [
@@ -25,15 +26,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@opencode/client": "^2.0.5",
     "@opencode/plugin": "^2.0.5",
     "@opentui/core": "^0.5.11",
     "@opentui/solid": "^0.5.11",
-    "solid-js": "1.9.12"
+    "solid-js": "1.9.12",
+    "jsonc-parser": "^3.3.1"
   },
   "devDependencies": {
     "@babel/core": "^7.28.0",
     "@babel/preset-typescript": "^7.27.1",
-    "@opencode/client": "^2.0.5",
     "@opencode/theme": "^2.0.5",
     "@types/node": "^25.9.1",
     "babel-preset-solid": "1.9.12",

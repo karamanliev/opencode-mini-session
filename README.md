@@ -30,15 +30,20 @@ opencode plugin add opencode-mini-session
 
 ### Manual
 
-Add it to your OpenCode CLI config (`~/.config/opencode/cli.json`):
+Add it to your global OpenCode config (`~/.config/opencode/opencode.jsonc`). OpenCode loads both the server entrypoint and its TUI companion:
 
 ```json
 {
+  "$schema": "https://opencode.ai/config.json",
   "plugins": [
     "opencode-mini-session"
   ]
 }
 ```
+
+Existing `cli.json` installations continue working. On a local managed service, npm installs offer to move opencode-mini-session configuration to `opencode.jsonc` for native version display and updates in `/plugins` and future server-side features. Choose **Migrate**, **Not now** to be asked again on the next startup, or **Don't ask again** to dismiss permanently. Escape also defers until the next startup. Run `/mini-migrate` at any time to reopen the offer. Migration preserves package versions, options, unrelated settings, and JSONC comments, saves private backups beside existing configs, and requires restarting OpenCode and its local service.
+
+Automatic migration handles the default global config directory only. Local-path installs, remote or unverified services, existing server entries, conflicting config files, and entries containing variable substitutions require manual migration. CLI-only installs remain useful for connecting to remote servers.
 
 ### OpenCode V1
 
@@ -180,11 +185,15 @@ Fresh mini mode skips this copied-context step entirely.
 
 ### Update the plugin
 
-The plugin checks the npm registry on startup and shows any newer version with the update command. Apply it with:
+The plugin checks the npm registry on startup and shows any newer version. For installs in `opencode.jsonc`, open `/plugins`, select the **Server** entry for `opencode-mini-session`, and use the update action. The TUI entry only controls enabling and disabling the UI. Existing CLI-only installs can run `/mini-migrate` to enable managed TUI updates.
+
+Alternatively, run this in your terminal:
 
 ```sh
 opencode plugin update opencode-mini-session
 ```
+
+Local-path installs and exact pinned versions are not updated by OpenCode. Use an unpinned package entry such as `opencode-mini-session` to receive managed updates.
 
 ### Refresh the plugin
 

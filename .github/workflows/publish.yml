@@ -32,9 +32,9 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:package
 
-      - run: npm publish --provenance --access public
+      - run: node scripts/publish.mjs
 
       - name: Create GitHub release
-        run: gh release create $GITHUB_REF_NAME --generate-notes
+        run: node scripts/create-github-release.mjs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

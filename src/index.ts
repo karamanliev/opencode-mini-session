@@ -18,11 +18,13 @@ import type {
   ThinkingPreferenceState,
 } from "./types";
 import { startAutoUpdate } from "./update";
+import { startMigrationCheck } from "./migration";
+import { loadOptions } from "./options";
 
 export default Plugin.define({
   id: PLUGIN_ID,
   async setup(ctx) {
-    const config = parseConfig(ctx.options);
+    const config = parseConfig(await loadOptions(ctx));
     const [overlay, setOverlay] = createSignal<OverlayState | undefined>(
       undefined,
       { equals: false },
@@ -107,6 +109,7 @@ export default Plugin.define({
 
     const updateController = new AbortController();
     startAutoUpdate(ctx, setUpdateWarning, updateController.signal);
+    startMigrationCheck(ctx, updateController.signal);
 
     const actions: MiniKeybindActions = {
       config,

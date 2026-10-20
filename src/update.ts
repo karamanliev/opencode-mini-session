@@ -23,7 +23,17 @@ export function startAutoUpdate(
   signal: AbortSignal,
 ) {
   void checkAutoUpdate(signal)
-    .then((result) => handleAutoUpdateResult(ctx, result, setUpdateWarning))
+    .then(async (result) => {
+      if (!result.updated || signal.aborted) return;
+      const plugins = await ctx.client.plugin.list({
+        location: ctx.location ?? ctx.data.location.default(),
+      }).catch(() => ({ data: [] }));
+      const managed = plugins.data.some((plugin) =>
+        plugin.source.type === "package" &&
+        (plugin.source.target === PACKAGE_NAME || plugin.source.target.startsWith(`${PACKAGE_NAME}@`)),
+      );
+      if (!signal.aborted) handleAutoUpdateResult(ctx, result, setUpdateWarning, managed);
+    })
     .catch(() => {});
 }
 
@@ -31,19 +41,26 @@ export function handleAutoUpdateResult(
   ctx: Pick<TuiContext, "ui">,
   result: UpdateCheckResult,
   setUpdateWarning: (warning: string | undefined) => void,
+  managed = false,
 ) {
   if (!result.updated) return;
 
-  setUpdateWarning(buildUpdateWarning(result.latest));
+  setUpdateWarning(buildUpdateWarning(result.latest, managed));
   ctx.ui.toast.show({
     variant: "info",
-    message: `New ${result.name} ${result.latest} version available. Run \`${UPDATE_COMMAND}\` to update.`,
+    message: `New ${result.name} ${result.latest} version available. ${updateInstructions(managed)}`,
     duration: 8000,
   });
 }
 
-export function buildUpdateWarning(latest: string) {
-  return `New version available: ${latest}. Run \`${UPDATE_COMMAND}\` to update.`;
+export function buildUpdateWarning(latest: string, managed = false) {
+  return `New version available: ${latest}. ${updateInstructions(managed)}`;
+}
+
+function updateInstructions(managed: boolean) {
+  return managed
+    ? `Open \`/plugins\` and select the plugin entry for ${PACKAGE_NAME} to update, or run \`${UPDATE_COMMAND}\` in your terminal.`
+    : `Run \`${UPDATE_COMMAND}\` in your terminal to update. Run \`/mini-migrate\` to enable updates in \`/plugins\`.`;
 }
 
 export async function checkAutoUpdate(

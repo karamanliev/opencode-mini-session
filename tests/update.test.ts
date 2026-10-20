@@ -137,9 +137,9 @@ describe("checkAutoUpdate", () => {
 });
 
 describe("update presentation", () => {
-  it("builds the update warning with the update command", () => {
-    expect(buildUpdateWarning("0.4.0")).toBe(
-      `New version available: 0.4.0. Run \`${UPDATE_COMMAND}\` to update.`,
+  it("points to the plugins dialog first with the terminal command as a fallback", () => {
+    expect(buildUpdateWarning("0.4.0", true)).toBe(
+      `New version available: 0.4.0. Open \`/plugins\` and select the plugin entry for opencode-mini-session to update, or run \`${UPDATE_COMMAND}\` in your terminal.`,
     );
   });
 
@@ -156,17 +156,24 @@ describe("update presentation", () => {
         latest: "0.4.0",
       },
       setUpdateWarning,
+      true,
     );
 
     expect(setUpdateWarning).toHaveBeenCalledWith(
-      `New version available: 0.4.0. Run \`${UPDATE_COMMAND}\` to update.`,
+      `New version available: 0.4.0. Open \`/plugins\` and select the plugin entry for opencode-mini-session to update, or run \`${UPDATE_COMMAND}\` in your terminal.`,
     );
     expect(show).toHaveBeenCalledWith({
       variant: "info",
       message:
-        "New opencode-mini-session 0.4.0 version available. Run `opencode plugin update opencode-mini-session` to update.",
+        "New opencode-mini-session 0.4.0 version available. Open `/plugins` and select the plugin entry for opencode-mini-session to update, or run `opencode plugin update opencode-mini-session` in your terminal.",
       duration: 8000,
     });
+  });
+
+  it("keeps CLI-only installs on the command fallback until migrated", () => {
+    expect(buildUpdateWarning("0.4.0")).toBe(
+      `New version available: 0.4.0. Run \`${UPDATE_COMMAND}\` in your terminal to update. Run \`/mini-migrate\` to enable updates in \`/plugins\`.`,
+    );
   });
 
   it("does nothing when no update is available", () => {

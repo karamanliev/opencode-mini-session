@@ -70,7 +70,7 @@ try {
     "bun",
     [
       "--eval",
-      'import plugin from "opencode-mini-session/tui"; if (plugin.id !== "opencode-mini-session" || typeof plugin.setup !== "function") throw new Error("Invalid packaged TUI module");',
+      'import plugin from "opencode-mini-session/tui"; import server from "opencode-mini-session"; if (plugin.id !== "opencode-mini-session" || typeof plugin.setup !== "function") throw new Error("Invalid packaged TUI module"); if (server.id !== "opencode-mini-session" || typeof server.setup !== "function") throw new Error("Invalid packaged server module"); await server.setup({options: {}, rpc: {register: async () => ({})}});',
     ],
     { cwd: installDir, stdio: "inherit" },
   );

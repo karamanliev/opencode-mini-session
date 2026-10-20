@@ -47,6 +47,10 @@ function fakeCtx(options: Record<string, unknown> = {}) {
     },
     keymap: { layer: vi.fn() },
     storage: {
+      memory: vi.fn((_key: string, options: { initial: any }) => {
+        const value = structuredClone(options.initial);
+        return [value, (mutation: (draft: any) => void) => mutation(value)];
+      }),
       store: vi.fn((key: string, initial: { initial: any }) => {
         const value =
           storage.get(key) ?? JSON.parse(JSON.stringify(initial.initial));
