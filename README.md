@@ -193,6 +193,8 @@ Alternatively, run this in your terminal:
 opencode plugin update opencode-mini-session
 ```
 
+After updating, restart the OpenCode TUI to load the new UI code. The version shown in `/plugins` can update before the currently running TUI reloads.
+
 Local-path installs and exact pinned versions are not updated by OpenCode. Use an unpinned package entry such as `opencode-mini-session` to receive managed updates.
 
 ### Refresh the plugin
